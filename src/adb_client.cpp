@@ -144,14 +144,15 @@ int RunCancellable(const std::vector<std::string>& args,
 
 }  // namespace
 
-AdbClient::AdbClient(std::string serial) : serial_(std::move(serial)) {}
+AdbClient::AdbClient(std::string adb_command, std::string serial)
+    : adb_command_(std::move(adb_command)), serial_(std::move(serial)) {}
 
-bool AdbClient::IsAvailable() {
-    return RunCapture({"adb", "version"}).exit_code == 0;
+bool AdbClient::IsAvailable(const std::string& adb_command) {
+    return RunCapture({adb_command, "version"}).exit_code == 0;
 }
 
-std::optional<std::string> AdbClient::FirstDeviceSerial() {
-    CommandResult result = RunCapture({"adb", "devices"});
+std::optional<std::string> AdbClient::FirstDeviceSerial(const std::string& adb_command) {
+    CommandResult result = RunCapture({adb_command, "devices"});
     if (result.exit_code != 0) {
         return std::nullopt;
     }
@@ -174,14 +175,14 @@ std::optional<std::string> AdbClient::FirstDeviceSerial() {
 }
 
 CommandResult AdbClient::ListDirectory(const std::string& remote_path) const {
-    return RunCapture({"adb", "-s", serial_, "shell", ListScript(remote_path)});
+    return RunCapture({adb_command_, "-s", serial_, "shell", ListScript(remote_path)});
 }
 
 int AdbClient::Pull(const std::string& remote_path,
                     const std::string& local_dir,
                     std::atomic_bool& cancel_requested,
                     std::atomic<int>& current_pid) const {
-    return RunCancellable({"adb", "-s", serial_, "pull", remote_path, local_dir},
+    return RunCancellable({adb_command_, "-s", serial_, "pull", remote_path, local_dir},
                           cancel_requested,
                           current_pid);
 }
@@ -190,7 +191,7 @@ int AdbClient::Push(const std::string& local_path,
                     const std::string& remote_dir,
                     std::atomic_bool& cancel_requested,
                     std::atomic<int>& current_pid) const {
-    return RunCancellable({"adb", "-s", serial_, "push", local_path, remote_dir},
+    return RunCancellable({adb_command_, "-s", serial_, "push", local_path, remote_dir},
                           cancel_requested,
                           current_pid);
 }

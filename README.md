@@ -20,14 +20,21 @@ cmake --build build
 ./build/adb-files-tui
 ```
 
-The executable accepts two optional arguments:
+The executable accepts three optional arguments:
 
 ```sh
-./build/adb-files-tui [output-directory] [adb-device-serial]
+./build/adb-files-tui [output-directory] [adb-device-serial] [adb-path]
 ```
 
 - `output-directory`: directory used for exported files. If omitted, the current working directory is used.
 - `adb-device-serial`: target adb device serial. If omitted, the first `adb devices` entry with state `device` is used.
+- `adb-path`: adb executable path, or a directory containing `adb`. If omitted, `adb` is resolved from the system `PATH`.
+
+For example, on this machine:
+
+```sh
+./build/adb-files-tui . "" /Users/devq-mini/Library/Android/sdk/platform-tools
+```
 
 ## Controls
 

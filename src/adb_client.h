@@ -23,10 +23,10 @@ struct CommandResult {
 
 class AdbClient {
 public:
-    explicit AdbClient(std::string serial);
+    AdbClient(std::string adb_command, std::string serial);
 
-    static bool IsAvailable();
-    static std::optional<std::string> FirstDeviceSerial();
+    static bool IsAvailable(const std::string& adb_command);
+    static std::optional<std::string> FirstDeviceSerial(const std::string& adb_command);
 
     CommandResult ListDirectory(const std::string& remote_path) const;
     int Pull(const std::string& remote_path,
@@ -41,6 +41,7 @@ public:
     const std::string& serial() const { return serial_; }
 
 private:
+    std::string adb_command_;
     std::string serial_;
 };
 

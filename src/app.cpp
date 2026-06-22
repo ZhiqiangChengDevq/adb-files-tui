@@ -286,10 +286,12 @@ void StartImport(TuiState& state,
 
 }  // namespace
 
-int RunAdbFilesTui(const std::filesystem::path& output_dir, const std::string& serial) {
+int RunAdbFilesTui(const std::filesystem::path& output_dir,
+                   const std::string& serial,
+                   const std::string& adb_command) {
     using namespace ftxui;
 
-    AdbClient adb(serial);
+    AdbClient adb(adb_command, serial);
     TuiState state;
     std::atomic_bool cancel_requested{false};
     std::atomic<int> current_pid{-1};

@@ -172,3 +172,34 @@ PLEASE IMPLEMENT THIS PLAN:
 - Codex 回复：补充 Batch 006 的完整实现提示词、方案和验证/提交信息，并提交本次历史记录更新。
 - 文件变更：
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 008
+
+- Time: 2026-06-22 21:05:11 CST (+0800)
+- 用户请求：为程序增加第三个启动参数，该参数代表当前系统中 adb 文件的路径；如果没有输入，则默认使用不带路径的 `adb` 命令，借助系统环境变量中的 adb 程序运行。当前电脑中的 adb 文件位于 `/Users/devq-mini/Library/Android/sdk/platform-tools`，测试时可以使用该路径；测试全局命令时可以修改 zshrc 文件增加路径。提示词需要补充到 `CODEX_HISTORY.md` 中。
+- Codex 回复：计划并实现第三个 adb 路径参数，支持传入 adb 可执行文件路径或包含 adb 的目录；不传时继续使用 `adb`；更新 README 和历史记录，使用本机 Android SDK platform-tools 路径完成验证后提交 git。
+- 使用提示词：
+
+```text
+为程序增加第三个启动参数设置，这个参数代表了当前系统中adb文件的路径，如果没有输入则默认直接使用不带路径的adb命令，借助系统环境变量中的adb程序运行。需要指出的是，该电脑中的adb文件在/Users/devq-mini/Library/Android/sdk/platform-tools路径，测试时可以使用该路径。测试全局命令时可以修改zshrc文件增加路径。 提示词需要补充到 [CODEX_HISTORY.md](CODEX_HISTORY.md) 中
+```
+
+- 实施方案：
+  - 将 `AdbClient` 从硬编码 `adb` 改为保存启动期传入的 adb 命令路径。
+  - 将 `IsAvailable` 和 `FirstDeviceSerial` 改为接收 adb 命令路径，确保可用性检查和设备检测都使用同一个 adb。
+  - `main` 新增第三参数解析：未传或传空字符串时使用 `adb`；传入目录时自动追加 `adb`；传入文件路径时直接使用。
+  - 为了允许“指定第三参数但自动选择设备”，第二参数支持传入空字符串，例如 `./build/adb-files-tui . "" /Users/devq-mini/Library/Android/sdk/platform-tools`。
+  - 更新 README 的启动参数说明和本机测试示例。
+  - 不修改 `~/.zshrc`，因为本次可以直接通过第三参数验证指定 adb 路径；全局 PATH 配置保留给用户环境需要时手动处理。
+- 验证结果：
+  - `cmake -S . -B build && cmake --build build` 通过。
+  - 不传第三参数时，当前环境输出 `adb is not available: adb`。
+  - 使用 `./build/adb-files-tui . "" /Users/devq-mini/Library/Android/sdk/platform-tools` 时，程序成功调用该目录下的 adb，自动检测到设备并进入 `/` 根目录 TUI，可按 Esc 退出。
+- 文件变更：
+  - 更新 `src/adb_client.h`
+  - 更新 `src/adb_client.cpp`
+  - 更新 `src/app.h`
+  - 更新 `src/app.cpp`
+  - 更新 `src/main.cpp`
+  - 更新 `README.md`
+  - 更新 `CODEX_HISTORY.md`
