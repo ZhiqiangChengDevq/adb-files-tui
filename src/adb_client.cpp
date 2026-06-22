@@ -101,6 +101,7 @@ int RunCancellable(const std::vector<std::string>& args,
 
         int dev_null = open("/dev/null", O_RDWR);
         if (dev_null >= 0) {
+            dup2(dev_null, STDIN_FILENO);
             dup2(dev_null, STDOUT_FILENO);
             dup2(dev_null, STDERR_FILENO);
             close(dev_null);

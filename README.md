@@ -38,9 +38,10 @@ For example, on this machine:
 
 ## Controls
 
-- `Up` / `Down`: move the cursor.
-- `Right`: enter a directory.
-- `Left`: return to the parent directory. The remote root `/` cannot go higher.
+- `Up` / `W`: move the cursor up.
+- `Down` / `S`: move the cursor down.
+- `Right` / `D`: enter a directory.
+- `Left` / `A`: return to the parent directory. The remote root `/` cannot go higher.
 - `Space`: select or unselect the current file or directory.
 - `E`: export selected files or directories.
 - `I`: import one local file into the current remote directory.

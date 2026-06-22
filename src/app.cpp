@@ -26,6 +26,7 @@ namespace {
 
 constexpr const char* kAppName = "adb-files-tui";
 constexpr const char* kVersion = ADB_FILES_TUI_VERSION;
+constexpr int kHelpPanelWidth = 30;
 
 struct CopyState {
     bool active = false;
@@ -126,6 +127,33 @@ ftxui::Element FileList(const TuiState& state) {
     return vbox(std::move(rows)) | yframe | vscroll_indicator | flex;
 }
 
+ftxui::Element HelpPanel(const TuiState& state) {
+    using namespace ftxui;
+    Elements rows{
+        text(Tr(state.chinese, "按键说明", "Controls")) | bold,
+        separator(),
+        text(Tr(state.chinese, "↑ / W  上移", "↑ / W  Up")),
+        text(Tr(state.chinese, "↓ / S  下移", "↓ / S  Down")),
+        text(Tr(state.chinese, "→ / D  进入目录", "→ / D  Enter")),
+        text(Tr(state.chinese, "← / A  返回上级", "← / A  Back")),
+        text(Tr(state.chinese, "Space  选择/取消", "Space  Toggle")),
+        text(Tr(state.chinese, "E      导出选中", "E      Export")),
+        text(Tr(state.chinese, "I      导入文件", "I      Import")),
+        text(Tr(state.chinese, "L      切换语言", "L      Language")),
+        text(Tr(state.chinese, "Esc    退出/取消", "Esc    Exit/Cancel")),
+    };
+    return vbox(std::move(rows)) | border | size(WIDTH, EQUAL, kHelpPanelWidth);
+}
+
+ftxui::Element MainArea(const TuiState& state) {
+    using namespace ftxui;
+    return hbox({
+               FileList(state) | flex,
+               HelpPanel(state),
+           }) |
+           flex;
+}
+
 ftxui::Element CopyModal(const TuiState& state) {
     using namespace ftxui;
     const float progress = state.copy.total <= 0
@@ -141,6 +169,27 @@ ftxui::Element CopyModal(const TuiState& state) {
                       text(count.str()),
                       text(Tr(state.chinese, "Esc 取消/关闭", "Esc cancel/close")) | dim,
                   }) | size(WIDTH, GREATER_THAN, 42));
+}
+
+std::string FinalCopyMessage(bool chinese, bool cancelled, int failures) {
+    if (cancelled) {
+        return Tr(chinese, "已取消", "Cancelled");
+    }
+    if (failures == 0) {
+        return Tr(chinese, "已完成", "Completed");
+    }
+    return std::to_string(failures) + Tr(chinese, " 项失败", " failed");
+}
+
+void AutoCloseCopyModal(TuiState& state, ftxui::ScreenInteractive* screen) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    screen->Post([&state] {
+        if (state.copy.active && state.copy.finished) {
+            state.status = state.copy.message;
+            state.copy.active = false;
+        }
+    });
+    screen->PostEvent(ftxui::Event::Custom);
 }
 
 ftxui::Element InputModal(const TuiState& state, ftxui::Element input_element) {
@@ -227,15 +276,10 @@ void StartExport(TuiState& state,
         screen->Post([&state, cancelled, failures] {
             state.copy.finished = true;
             state.copy.cancelled = cancelled;
-            if (state.copy.cancelled) {
-                state.copy.message = "Cancelled";
-            } else if (failures == 0) {
-                state.copy.message = "Done";
-            } else {
-                state.copy.message = std::to_string(failures) + " failed";
-            }
+            state.copy.message = FinalCopyMessage(state.chinese, state.copy.cancelled, failures);
         });
         screen->PostEvent(ftxui::Event::Custom);
+        AutoCloseCopyModal(state, screen);
     });
 }
 
@@ -271,17 +315,36 @@ void StartImport(TuiState& state,
         screen->Post([&state, code, cancelled] {
             if (code == 0) {
                 state.copy.completed = 1;
-                state.copy.message = "Done";
+                state.copy.message = Tr(state.chinese, "已完成", "Completed");
             } else if (cancelled) {
-                state.copy.message = "Cancelled";
+                state.copy.completed = 1;
+                state.copy.message = Tr(state.chinese, "已取消", "Cancelled");
                 state.copy.cancelled = true;
             } else {
-                state.copy.message = "Failed";
+                state.copy.completed = 1;
+                state.copy.message = Tr(state.chinese, "导入失败", "Import failed");
             }
             state.copy.finished = true;
         });
         screen->PostEvent(ftxui::Event::Custom);
+        AutoCloseCopyModal(state, screen);
     });
+}
+
+bool IsUpEvent(const ftxui::Event& event) {
+    return event == ftxui::Event::ArrowUp || event == ftxui::Event::W || event == ftxui::Event::w;
+}
+
+bool IsDownEvent(const ftxui::Event& event) {
+    return event == ftxui::Event::ArrowDown || event == ftxui::Event::S || event == ftxui::Event::s;
+}
+
+bool IsRightEvent(const ftxui::Event& event) {
+    return event == ftxui::Event::ArrowRight || event == ftxui::Event::D || event == ftxui::Event::d;
+}
+
+bool IsLeftEvent(const ftxui::Event& event) {
+    return event == ftxui::Event::ArrowLeft || event == ftxui::Event::A || event == ftxui::Event::a;
 }
 
 }  // namespace
@@ -305,7 +368,7 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
     auto renderer = Renderer(input, [&] {
         Element body = vbox({
             Header(state),
-            FileList(state),
+            MainArea(state),
             Footer(state, screen.dimx()),
         });
 
@@ -369,25 +432,25 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
             state.chinese = !state.chinese;
             return true;
         }
-        if (event == Event::ArrowUp) {
+        if (IsUpEvent(event)) {
             if (state.cursor > 0) {
                 --state.cursor;
             }
             return true;
         }
-        if (event == Event::ArrowDown) {
+        if (IsDownEvent(event)) {
             if (state.cursor + 1 < static_cast<int>(state.entries.size())) {
                 ++state.cursor;
             }
             return true;
         }
-        if (event == Event::ArrowRight) {
+        if (IsRightEvent(event)) {
             if (!state.entries.empty() && state.entries[state.cursor].type == EntryType::Directory) {
                 LoadDirectory(state, adb, JoinRemotePath(state.current_path, state.entries[state.cursor].name));
             }
             return true;
         }
-        if (event == Event::ArrowLeft) {
+        if (IsLeftEvent(event)) {
             if (state.current_path != "/") {
                 LoadDirectory(state, adb, ParentRemotePath(state.current_path));
             }
