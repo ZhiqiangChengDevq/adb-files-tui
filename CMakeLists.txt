@@ -9,10 +9,17 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(ftxui CONFIG REQUIRED)
 
 add_executable(adb-files-tui
+    src/adb_client.cpp
+    src/app.cpp
     src/main.cpp
 )
 
 target_link_libraries(adb-files-tui
     PRIVATE
         ftxui::ftxui
+)
+
+target_compile_definitions(adb-files-tui
+    PRIVATE
+        ADB_FILES_TUI_VERSION="${PROJECT_VERSION}"
 )

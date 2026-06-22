@@ -54,3 +54,18 @@
   - 更新 `src/main.cpp`
   - 更新 `README.md`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 006
+
+- Time: 2026-06-22 20:51:07 CST (+0800)
+- 用户请求：按照已确认计划实现基于 FTXUI 的简易 ADB 文件工具，支持参数解析、设备文件浏览、导入导出、进度弹窗、取消、语言切换，并在验证后提交 git。
+- Codex 回复：实现 ADB 命令封装和 FTXUI 主界面，补充运行说明，完成编译及无 adb 错误路径验证后提交改动。
+- 文件变更：
+  - 更新 `CMakeLists.txt`
+  - 更新 `src/main.cpp`
+  - 新增 `src/adb_client.h`
+  - 新增 `src/adb_client.cpp`
+  - 新增 `src/app.h`
+  - 新增 `src/app.cpp`
+  - 更新 `README.md`
+  - 更新 `CODEX_HISTORY.md`
