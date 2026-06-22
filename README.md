@@ -3,6 +3,12 @@ a tui file manager by adb tools
 
 ## Build
 
+FTXUI is required and can be installed with Homebrew:
+
+```sh
+brew install ftxui
+```
+
 ```sh
 cmake -S . -B build
 cmake --build build

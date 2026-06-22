@@ -43,3 +43,14 @@
 - Codex 回复：追加本次提交请求到历史文件，暂存并提交相关工程文件和文档。
 - 文件变更：
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 005
+
+- Time: 2026-06-22 20:36:34 CST (+0800)
+- 用户请求：在 CMake 中配置已通过 Homebrew 安装的 FTXUI 框架，确保可以编译并运行后提交 git。
+- Codex 回复：配置 CMake 查找并链接 FTXUI，更新示例程序使用 FTXUI 输出终端内容，验证构建运行后提交改动。
+- 文件变更：
+  - 更新 `CMakeLists.txt`
+  - 更新 `src/main.cpp`
+  - 更新 `README.md`
+  - 更新 `CODEX_HISTORY.md`
