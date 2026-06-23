@@ -1,6 +1,12 @@
 # adb-files-tui
 a tui file manager by adb tools
 
+Languages: English | [中文](README_ZH.md)
+
+## Preview
+
+![adb-files-tui English preview](images/preview_en.png)
+
 ## Build
 
 FTXUI is required and can be installed with Homebrew:

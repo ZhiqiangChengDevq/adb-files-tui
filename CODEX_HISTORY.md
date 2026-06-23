@@ -262,3 +262,27 @@ PLEASE IMPLEMENT THIS PLAN:
 - 文件变更：
   - 更新 `src/app.cpp`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 011
+
+- Time: 2026-06-23 09:55:44 CST (+0800)
+- 用户请求：在 `images/` 目录下新增了两个语言下的预览图；将英文版本补充到 `README.md` 中，同时创建 `README_ZH.md` 文件并可通过 `README.md` 跳转过去；`README_ZH.md` 内容由 `README.md` 翻译得到；完成修改后提交 git。
+- Codex 回复：检查 `images/preview_en.png` 和 `images/preview_zh.png`，在英文 README 中增加中文链接和英文预览图，创建中文 README 并引用中文预览图，将本轮记录追加到历史文件后提交。
+- 使用提示词：
+
+```text
+我在 [images](images/) 目录下面新增了两个语言下的预览图，请将英文的版本补充到 [README.md](README.md) 中，同时也创建一个 README_ZH.md文件并可以通过 [README.md](README.md) 跳转过去， README_ZH.md文件内容由 [README.md](README.md) 内容翻译得到。完成修改后提交git
+```
+
+- 实施方案：
+  - 在 `README.md` 顶部增加语言切换入口：English 和 `README_ZH.md`。
+  - 在 `README.md` 增加 Preview 小节，引用 `images/preview_en.png`。
+  - 新建 `README_ZH.md`，翻译英文 README 的项目说明、预览、构建、运行参数和控制说明。
+  - 在 `README_ZH.md` 中引用 `images/preview_zh.png`，并提供返回英文 README 的链接。
+  - 将用户新增的 `images/preview_en.png` 和 `images/preview_zh.png` 一并纳入提交，保证 README 图片链接有效。
+- 文件变更：
+  - 更新 `README.md`
+  - 新增 `README_ZH.md`
+  - 新增 `images/preview_en.png`
+  - 新增 `images/preview_zh.png`
+  - 更新 `CODEX_HISTORY.md`
