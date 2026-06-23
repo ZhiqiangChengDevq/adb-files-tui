@@ -325,3 +325,33 @@ PLEASE IMPLEMENT THIS PLAN:
 - 文件变更：
   - 更新 `src/app.cpp`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 014
+
+- Time: 2026-06-23 10:26:56 CST (+0800)
+- 用户请求：增加一个软件编译输出的文件，将最新的编译产物一并提交到 Github 并在 README 中体现下载链接；为了确保别人拿到程序即可执行，需要使用静态编译以保证第三方库集成到输出物中；完成修改后提交 git。
+- Codex 回复：检查当前 Homebrew FTXUI 只提供动态库且现有构建依赖 `libftxui-*.dylib`；改造 CMake 为默认从 FTXUI v7.0.0 源码构建静态库并链接进程序；生成 macOS arm64 发布二进制到 `dist/adb-files-tui-darwin-arm64`；更新 README/README_ZH 下载链接和构建说明；验证产物不依赖 FTXUI 动态库后提交。
+- 使用提示词：
+
+```text
+增加一个软件编译输出的文件，将最新的编译产物一并提交到Github并在README中体现下载链接。需要注意的是，为了确保别人拿到程序即可执行你需要使用静态编译以保证第三方库集成到输出物中。完成修改后提交git
+```
+
+- 实施方案：
+  - 在 CMake 中新增 `ADB_FILES_TUI_STATIC_FTXUI` 选项，默认开启。
+  - 默认构建路径使用 `FetchContent` 拉取 FTXUI v7.0.0，并关闭 examples/docs/tests，以静态库形式参与链接。
+  - 保留 `-DADB_FILES_TUI_STATIC_FTXUI=OFF` 路径，允许继续使用 Homebrew/system FTXUI。
+  - 使用 Release 配置构建最新产物，并复制到 `dist/adb-files-tui-darwin-arm64`。
+  - 在 README 和 README_ZH 中增加下载链接，并说明发布产物已静态链接 FTXUI，但仍需要外部 `adb`。
+- 验证结果：
+  - `cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DADB_FILES_TUI_STATIC_FTXUI=ON && cmake --build build-release --config Release` 通过。
+  - `otool -L dist/adb-files-tui-darwin-arm64` 仅显示 `/usr/lib/libc++.1.dylib` 和 `/usr/lib/libSystem.B.dylib`，不再依赖 Homebrew FTXUI dylib。
+  - `file dist/adb-files-tui-darwin-arm64` 显示 Mach-O arm64 可执行文件，大小约 748K。
+  - `cmake -S . -B build-homebrew -DADB_FILES_TUI_STATIC_FTXUI=OFF && cmake --build build-homebrew` 通过，确认系统 FTXUI 备用构建路径仍可用。
+  - 使用 `dist/adb-files-tui-darwin-arm64 . "" /Users/devq-mini/Library/Android/sdk/platform-tools` 启动发布产物，可进入设备根目录 TUI，并可按 Esc 正常退出。
+- 文件变更：
+  - 更新 `CMakeLists.txt`
+  - 更新 `README.md`
+  - 更新 `README_ZH.md`
+  - 新增 `dist/adb-files-tui-darwin-arm64`
+  - 更新 `CODEX_HISTORY.md`

@@ -11,16 +11,26 @@
 
 ![adb-files-tui 中文预览](images/preview_zh.png)
 
+## 下载
+
+- [macOS arm64 可执行文件](dist/adb-files-tui-darwin-arm64)
+
+该发布可执行文件已将 FTXUI 静态链接进二进制文件中。程序仍需要通过系统 `PATH` 或可选的 `adb路径` 参数找到 `adb`。
+
 ## 构建
 
-需要安装 FTXUI，可以通过 Homebrew 安装：
+默认构建会从源码下载 FTXUI v7.0.0，并将其静态链接进可执行文件：
+
+```sh
+cmake -S . -B build -DADB_FILES_TUI_STATIC_FTXUI=ON
+cmake --build build
+```
+
+也可以使用系统中已安装的 FTXUI 包：
 
 ```sh
 brew install ftxui
-```
-
-```sh
-cmake -S . -B build
+cmake -S . -B build -DADB_FILES_TUI_STATIC_FTXUI=OFF
 cmake --build build
 ```
 

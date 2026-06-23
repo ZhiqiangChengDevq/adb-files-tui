@@ -11,16 +11,26 @@ This project was implemented entirely through vibe coding. The full vibe coding 
 
 ![adb-files-tui English preview](images/preview_en.png)
 
+## Download
+
+- [macOS arm64 executable](dist/adb-files-tui-darwin-arm64)
+
+The release executable statically links FTXUI into the binary. It still expects `adb` to be available either from `PATH` or from the optional `adb-path` argument.
+
 ## Build
 
-FTXUI is required and can be installed with Homebrew:
+The default build downloads FTXUI v7.0.0 from source and links it statically into the executable:
+
+```sh
+cmake -S . -B build -DADB_FILES_TUI_STATIC_FTXUI=ON
+cmake --build build
+```
+
+You can also use a system-installed FTXUI package:
 
 ```sh
 brew install ftxui
-```
-
-```sh
-cmake -S . -B build
+cmake -S . -B build -DADB_FILES_TUI_STATIC_FTXUI=OFF
 cmake --build build
 ```
 
