@@ -286,3 +286,19 @@ PLEASE IMPLEMENT THIS PLAN:
   - 新增 `images/preview_en.png`
   - 新增 `images/preview_zh.png`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 012
+
+- Time: 2026-06-23 10:09:23 CST (+0800)
+- 用户请求：在 README 中增加对于该工程的关键描述并链接到 `CODEX_HISTORY.md` 文件，说明该工程完全通过 vibe coding 实现，vibe 过程均记录在 Markdown 文件中。
+- Codex 回复：在英文 README 中新增 `Project History` 小节，说明项目完全通过 vibe coding 实现并链接到 `CODEX_HISTORY.md`；同步更新中文 README 的对应 `项目历史` 小节；将本轮记录追加到历史文件。
+- 使用提示词：
+
+```text
+在 README中增加对于该工程的一个关键描述并链接到 [CODEX_HISTORY.md](CODEX_HISTORY.md) 文件，说明该工程完全通过vibe coding实现，vibe过程均记录在markdown文件中
+```
+
+- 文件变更：
+  - 更新 `README.md`
+  - 更新 `README_ZH.md`
+  - 更新 `CODEX_HISTORY.md`

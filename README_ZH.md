@@ -3,6 +3,10 @@
 
 语言：[English](README.md) | 中文
 
+## 项目历史
+
+该工程完全通过 vibe coding 实现。完整的 vibe coding 过程，包括提示词、方案、实现记录和验证结果，均记录在 [CODEX_HISTORY.md](CODEX_HISTORY.md) 中。
+
 ## 预览
 
 ![adb-files-tui 中文预览](images/preview_zh.png)

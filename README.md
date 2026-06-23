@@ -3,6 +3,10 @@ a tui file manager by adb tools
 
 Languages: English | [中文](README_ZH.md)
 
+## Project History
+
+This project was implemented entirely through vibe coding. The full vibe coding process, including prompts, plans, implementation notes, and verification records, is documented in [CODEX_HISTORY.md](CODEX_HISTORY.md).
+
 ## Preview
 
 ![adb-files-tui English preview](images/preview_en.png)
