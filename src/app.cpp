@@ -38,8 +38,14 @@ struct CopyState {
     std::string message;
 };
 
+enum class SortMode {
+    Name,
+    Time,
+};
+
 struct TuiState {
     bool chinese = true;
+    SortMode sort_mode = SortMode::Name;
     std::string current_path = "/";
     std::vector<RemoteEntry> entries;
     std::vector<bool> selected;
@@ -53,6 +59,69 @@ struct TuiState {
 
 std::string Tr(bool chinese, const std::string& zh, const std::string& en) {
     return chinese ? zh : en;
+}
+
+int TypeRank(EntryType type) {
+    switch (type) {
+        case EntryType::Directory:
+            return 0;
+        case EntryType::File:
+            return 1;
+        case EntryType::Other:
+            return 2;
+    }
+    return 3;
+}
+
+bool EntryLess(const RemoteEntry& lhs, const RemoteEntry& rhs, SortMode sort_mode) {
+    const int lhs_type = TypeRank(lhs.type);
+    const int rhs_type = TypeRank(rhs.type);
+    if (lhs_type != rhs_type) {
+        return lhs_type < rhs_type;
+    }
+
+    if (sort_mode == SortMode::Time && lhs.modified_time != rhs.modified_time) {
+        return lhs.modified_time > rhs.modified_time;
+    }
+    return lhs.name < rhs.name;
+}
+
+void SortEntries(std::vector<RemoteEntry>& entries, SortMode sort_mode) {
+    std::sort(entries.begin(), entries.end(), [sort_mode](const RemoteEntry& lhs, const RemoteEntry& rhs) {
+        return EntryLess(lhs, rhs, sort_mode);
+    });
+}
+
+void SortStateEntries(TuiState& state) {
+    std::vector<std::pair<RemoteEntry, bool>> rows;
+    rows.reserve(state.entries.size());
+    for (size_t i = 0; i < state.entries.size(); ++i) {
+        rows.push_back({std::move(state.entries[i]), i < state.selected.size() && state.selected[i]});
+    }
+
+    std::sort(rows.begin(), rows.end(), [&state](const auto& lhs, const auto& rhs) {
+        return EntryLess(lhs.first, rhs.first, state.sort_mode);
+    });
+
+    state.entries.clear();
+    state.selected.clear();
+    state.entries.reserve(rows.size());
+    state.selected.reserve(rows.size());
+    for (auto& row : rows) {
+        state.entries.push_back(std::move(row.first));
+        state.selected.push_back(row.second);
+    }
+
+    if (state.cursor >= static_cast<int>(state.entries.size())) {
+        state.cursor = state.entries.empty() ? 0 : static_cast<int>(state.entries.size()) - 1;
+    }
+}
+
+std::string SortModeLabel(const TuiState& state) {
+    if (state.sort_mode == SortMode::Name) {
+        return Tr(state.chinese, "排序:名称", "Sort:Name");
+    }
+    return Tr(state.chinese, "排序:时间", "Sort:Time");
 }
 
 std::string Timestamp() {
@@ -83,7 +152,7 @@ ftxui::Element Header(const TuiState& state) {
     return hbox({
                text(std::string("zh/en:") + (state.chinese ? "zh" : "en")) | size(WIDTH, EQUAL, 12),
                text(kAppName) | bold | hcenter | flex,
-               text(std::string("v") + kVersion) | align_right | size(WIDTH, EQUAL, 12),
+               text(SortModeLabel(state) + " v" + kVersion) | align_right | size(WIDTH, EQUAL, 24),
            }) |
            size(HEIGHT, EQUAL, 1);
 }
@@ -139,6 +208,7 @@ ftxui::Element HelpPanel(const TuiState& state) {
         text(Tr(state.chinese, "Space  选择/取消", "Space  Toggle")),
         text(Tr(state.chinese, "E      导出选中", "E      Export")),
         text(Tr(state.chinese, "I      导入文件", "I      Import")),
+        text(Tr(state.chinese, "O      切换排序", "O      Sort mode")),
         text(Tr(state.chinese, "L      切换语言", "L      Language")),
         text(Tr(state.chinese, "Esc    退出/取消", "Esc    Exit/Cancel")),
     };
@@ -213,6 +283,7 @@ void LoadDirectory(TuiState& state, const AdbClient& adb, const std::string& pat
     CommandResult result = adb.ListDirectory(path);
     state.current_path = path;
     state.entries = ParseDirectoryEntries(result.output);
+    SortEntries(state.entries, state.sort_mode);
     state.cursor = 0;
     ResetSelection(state);
     if (result.exit_code == 0) {
@@ -335,6 +406,7 @@ void StartImport(TuiState& state,
             if (code == 0) {
                 state.current_path = remote_dir;
                 state.entries = std::move(refreshed_entries);
+                SortEntries(state.entries, state.sort_mode);
                 state.cursor = 0;
                 ResetSelection(state);
                 state.copy.completed = 1;
@@ -459,6 +531,12 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
         }
         if (event == Event::L || event == Event::l) {
             state.chinese = !state.chinese;
+            return true;
+        }
+        if (event == Event::O || event == Event::o) {
+            state.sort_mode = state.sort_mode == SortMode::Name ? SortMode::Time : SortMode::Name;
+            SortStateEntries(state);
+            state.status = SortModeLabel(state);
             return true;
         }
         if (IsUpEvent(event)) {

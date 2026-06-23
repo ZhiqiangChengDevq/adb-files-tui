@@ -14,6 +14,7 @@ enum class EntryType {
 struct RemoteEntry {
     std::string name;
     EntryType type = EntryType::Other;
+    long long modified_time = 0;
 };
 
 struct CommandResult {

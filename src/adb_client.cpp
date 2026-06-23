@@ -75,9 +75,10 @@ std::string ListScript(const std::string& remote_path) {
     script << "cd " << RemoteQuote(remote_path) << " 2>/dev/null || exit 2; "
            << "for entry in * .[!.]* ..?*; do "
            << "[ -e \"$entry\" ] || continue; "
-           << "if [ -d \"$entry\" ]; then printf 'd\\t%s\\n' \"$entry\"; "
-           << "elif [ -f \"$entry\" ]; then printf 'f\\t%s\\n' \"$entry\"; "
-           << "else printf 'o\\t%s\\n' \"$entry\"; fi; "
+           << "mtime=$(stat -c %Y \"$entry\" 2>/dev/null || echo 0); "
+           << "if [ -d \"$entry\" ]; then printf 'd\\t%s\\t%s\\n' \"$mtime\" \"$entry\"; "
+           << "elif [ -f \"$entry\" ]; then printf 'f\\t%s\\t%s\\n' \"$mtime\" \"$entry\"; "
+           << "else printf 'o\\t%s\\t%s\\n' \"$mtime\" \"$entry\"; fi; "
            << "done";
     return script.str();
 }
@@ -207,7 +208,17 @@ std::vector<RemoteEntry> ParseDirectoryEntries(const std::string& output) {
         }
 
         RemoteEntry entry;
-        entry.name = line.substr(2);
+        const auto second_tab = line.find('\t', 2);
+        if (second_tab == std::string::npos) {
+            entry.name = line.substr(2);
+        } else {
+            try {
+                entry.modified_time = std::stoll(line.substr(2, second_tab - 2));
+            } catch (...) {
+                entry.modified_time = 0;
+            }
+            entry.name = line.substr(second_tab + 1);
+        }
         if (entry.name.empty() || entry.name == "." || entry.name == "..") {
             continue;
         }
@@ -221,13 +232,6 @@ std::vector<RemoteEntry> ParseDirectoryEntries(const std::string& output) {
         }
         entries.push_back(std::move(entry));
     }
-
-    std::sort(entries.begin(), entries.end(), [](const RemoteEntry& lhs, const RemoteEntry& rhs) {
-        if (lhs.type != rhs.type) {
-            return lhs.type == EntryType::Directory;
-        }
-        return lhs.name < rhs.name;
-    });
     return entries;
 }
 

@@ -379,3 +379,33 @@ PLEASE IMPLEMENT THIS PLAN:
 - Codex 回复：将本次提交请求追加到 `CODEX_HISTORY.md`，并提交 README、README_ZH 和历史记录改动。
 - 文件变更：
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 017
+
+- Time: 2026-06-23 11:19:12 CST (+0800)
+- 用户请求：新增一个功能，用于配置显示内容的排序方式，分为按时间排序和按名称排序；按 `O` 键可以切换，默认按文件名排序。
+- Codex 回复：扩展 adb 目录枚举以读取远端条目的修改时间；新增名称/时间排序模式，默认按名称排序，按 `O` 在名称排序和时间排序之间切换；更新帮助栏、README、README_ZH 和发布二进制。
+- 使用提示词：
+
+```text
+新增一个功能，该功能用于配置对显示内容的排序方式，分为按时间排序和按名称排序，按O键可以切换，默认按文件名
+```
+
+- 实施方案：
+  - 将 adb 远端目录枚举输出从 `类型 + 名称` 扩展为 `类型 + 修改时间 + 名称`，使用 `stat -c %Y` 获取修改时间，解析失败时回退为 `0`。
+  - 新增 `SortMode`，默认 `Name`；名称排序按目录/文件/其他分组后按名称升序，时间排序按目录/文件/其他分组后按修改时间倒序。
+  - 按 `O` 切换排序模式并立即重排当前列表，同时让条目与选中状态一起排序，避免勾选状态错位。
+  - 顶部状态显示当前排序模式，右侧帮助栏、README 和 README_ZH 增加 `O` 键说明。
+  - 重新构建并更新 `dist/adb-files-tui-darwin-arm64`，保持下载产物与源码功能一致。
+- 验证结果：
+  - `cmake --build build-release --config Release` 通过，并重新生成 `dist/adb-files-tui-darwin-arm64`。
+  - `otool -L dist/adb-files-tui-darwin-arm64` 仍只显示 macOS 系统库依赖，没有 FTXUI 动态库依赖。
+  - 使用 fake adb 返回 `alpha.txt` 修改时间 `100`、`beta.txt` 修改时间 `200`；默认名称排序显示 `alpha.txt` 在前，按 `O` 后切换为时间排序并显示 `beta.txt` 在前。
+- 文件变更：
+  - 更新 `src/adb_client.h`
+  - 更新 `src/adb_client.cpp`
+  - 更新 `src/app.cpp`
+  - 更新 `README.md`
+  - 更新 `README_ZH.md`
+  - 更新 `dist/adb-files-tui-darwin-arm64`
+  - 更新 `CODEX_HISTORY.md`

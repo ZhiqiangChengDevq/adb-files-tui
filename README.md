@@ -67,5 +67,6 @@ For example, on this machine:
 - `Space`: select or unselect the current file or directory.
 - `E`: export selected files or directories.
 - `I`: import one local file into the current remote directory.
+- `O`: switch sorting between name and modified time.
 - `L`: switch language between Chinese and English.
 - `Esc`: exit on the home screen, cancel or close dialogs.
