@@ -355,3 +355,27 @@ PLEASE IMPLEMENT THIS PLAN:
   - 更新 `README_ZH.md`
   - 新增 `dist/adb-files-tui-darwin-arm64`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 015
+
+- Time: 2026-06-23 11:16:18 CST (+0800)
+- 用户请求：在 Markdown 中新增一段对该工程的描述：该工程基于 adb 工具开发，旨在解决 Mac 平台下无法快速管理和查阅 Android 设备中的文件。基于该工具可以实现基础的文件管理，便于开发人员进行开发。
+- Codex 回复：在英文 README 中新增等价英文项目定位描述，在中文 README 中新增用户给出的中文项目描述，并记录本批次。
+- 使用提示词：
+
+```text
+在Markdown中新增一段对该工程的描述：该工程基于adb工具开发，旨在解决Mac平台下无法快速管理和查阅Android设备中的文件。基于该工具可以实现基础的文件管理，便于开发人员进行开发。
+```
+
+- 文件变更：
+  - 更新 `README.md`
+  - 更新 `README_ZH.md`
+  - 更新 `CODEX_HISTORY.md`
+
+## Batch 016
+
+- Time: 2026-06-23 11:17:04 CST (+0800)
+- 用户请求：完成后提交 git 并补充 Codex 文件记录。
+- Codex 回复：将本次提交请求追加到 `CODEX_HISTORY.md`，并提交 README、README_ZH 和历史记录改动。
+- 文件变更：
+  - 更新 `CODEX_HISTORY.md`

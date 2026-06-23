@@ -1,6 +1,8 @@
 # adb-files-tui
 a tui file manager by adb tools
 
+adb-files-tui is built on top of adb to make it faster to manage and inspect files on Android devices from macOS. It provides basic file management workflows that help developers browse, import, and export device files during development.
+
 Languages: English | [中文](README_ZH.md)
 
 ## Project History
