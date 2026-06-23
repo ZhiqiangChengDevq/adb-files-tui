@@ -235,8 +235,14 @@ void StartExport(TuiState& state,
             paths.push_back(JoinRemotePath(state.current_path, state.entries[i].name));
         }
     }
+
+    if (paths.empty() && !state.entries.empty() &&
+        state.cursor >= 0 && state.cursor < static_cast<int>(state.entries.size())) {
+        paths.push_back(JoinRemotePath(state.current_path, state.entries[state.cursor].name));
+    }
+
     if (paths.empty()) {
-        state.status = Tr(state.chinese, "请先选择要导出的文件或文件夹", "Select files or folders before exporting");
+        state.status = Tr(state.chinese, "没有可导出的文件或文件夹", "No file or folder is available to export");
         return;
     }
 
