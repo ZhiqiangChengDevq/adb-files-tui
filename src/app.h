@@ -5,4 +5,5 @@
 
 int RunAdbFilesTui(const std::filesystem::path& output_dir,
                    const std::string& serial,
-                   const std::string& adb_command);
+                   const std::string& adb_command,
+                   const std::string& verity_key);

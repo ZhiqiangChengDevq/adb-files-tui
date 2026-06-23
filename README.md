@@ -42,20 +42,27 @@ cmake --build build
 ./build/adb-files-tui
 ```
 
-The executable accepts three optional arguments:
+The executable accepts three optional positional arguments and one optional permission key flag:
 
 ```sh
-./build/adb-files-tui [output-directory] [adb-device-serial] [adb-path]
+./build/adb-files-tui [output-directory] [adb-device-serial] [adb-path] [-p permission-key]
 ```
 
 - `output-directory`: directory used for exported files. If omitted, the current working directory is used.
 - `adb-device-serial`: target adb device serial. If omitted, the first `adb devices` entry with state `device` is used.
 - `adb-path`: adb executable path, or a directory containing `adb`. If omitted, `adb` is resolved from the system `PATH`.
+- `-p permission-key`: optional key for devices that require `adb disable-verity` permission enabling. When set, adb-files-tui runs `adb -s <serial> disable-verity <permission-key>` before device file commands such as listing, pulling, and pushing.
 
 For example, on this machine:
 
 ```sh
 ./build/adb-files-tui . "" /Users/devq-mini/Library/Android/sdk/platform-tools
+```
+
+With a disable-verity permission key:
+
+```sh
+./build/adb-files-tui . "" /Users/devq-mini/Library/Android/sdk/platform-tools -p your-permission-key
 ```
 
 ## Controls

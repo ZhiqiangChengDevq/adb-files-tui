@@ -42,20 +42,27 @@ cmake --build build
 ./build/adb-files-tui
 ```
 
-可执行文件接受三个可选参数：
+可执行文件接受三个可选位置参数，以及一个可选权限秘钥参数：
 
 ```sh
-./build/adb-files-tui [输出目录] [adb设备序列号] [adb路径]
+./build/adb-files-tui [输出目录] [adb设备序列号] [adb路径] [-p 权限秘钥]
 ```
 
 - `输出目录`：用于保存导出文件的目录。如果省略，则使用当前工作目录。
 - `adb设备序列号`：目标 adb 设备序列号。如果省略，则使用 `adb devices` 中第一个状态为 `device` 的设备。
 - `adb路径`：adb 可执行文件路径，或包含 `adb` 的目录。如果省略，则从系统 `PATH` 中解析 `adb`。
+- `-p 权限秘钥`：可选参数，用于需要通过 `adb disable-verity` 开启权限的设备。设置后，adb-files-tui 会在列目录、导出、导入等设备文件命令前自动执行 `adb -s <serial> disable-verity <权限秘钥>`。
 
 例如，在当前机器上：
 
 ```sh
 ./build/adb-files-tui . "" /Users/devq-mini/Library/Android/sdk/platform-tools
+```
+
+携带 disable-verity 权限秘钥时：
+
+```sh
+./build/adb-files-tui . "" /Users/devq-mini/Library/Android/sdk/platform-tools -p your-permission-key
 ```
 
 ## 控制

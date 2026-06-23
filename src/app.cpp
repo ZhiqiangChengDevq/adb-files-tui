@@ -523,10 +523,11 @@ bool IsLeftEvent(const ftxui::Event& event) {
 
 int RunAdbFilesTui(const std::filesystem::path& output_dir,
                    const std::string& serial,
-                   const std::string& adb_command) {
+                   const std::string& adb_command,
+                   const std::string& verity_key) {
     using namespace ftxui;
 
-    AdbClient adb(adb_command, serial);
+    AdbClient adb(adb_command, serial, verity_key);
     TuiState state;
     std::atomic_bool cancel_requested{false};
     std::atomic<int> current_pid{-1};

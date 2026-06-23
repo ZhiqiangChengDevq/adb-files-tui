@@ -439,3 +439,36 @@ PLEASE IMPLEMENT THIS PLAN:
   - 更新 `src/app.cpp`
   - 更新 `dist/adb-files-tui-darwin-arm64`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 019
+
+- Time: 2026-06-23 15:03:14 CST (+0800)
+- 用户请求：新增一个功能，因为有些设备需要使用 `adb disable-verity + 秘钥` 开启权限；秘钥通过 `-p` 参数在启动时传入；一旦传入后，在执行相关 adb 命令前都会先自动执行 `adb disable-verity + 秘钥` 开启权限；完成修改后需要一并修改 README 和 Codex 记录文件。
+- Codex 回复：新增启动参数 `-p <permission-key>`，保持原有三个位置参数兼容；将秘钥传入 ADB 客户端，并在列目录、导出、导入等设备文件命令前自动执行 `disable-verity`；更新 README、README_ZH 和历史记录。
+- 使用提示词：
+
+```text
+新增一个功能，因为有些设备需要使用adb disable-verity + 秘钥开启权限，秘钥通过 -p参数在启动时传入，一旦传入后在执行相关adb命令前都会先自动执行adb disable-verity + 秘钥开启权限。完成修改后需要一并修改README和CODEX记录文件
+```
+
+- 实施方案：
+  - 将启动参数解析改为保留 `[output-directory] [adb-device-serial] [adb-path]` 三个位置参数，并额外识别 `-p <permission-key>`。
+  - 扩展 `RunAdbFilesTui` 和 `AdbClient` 构造参数，将可选权限秘钥传递到 ADB 命令封装层。
+  - 在 `AdbClient::ListDirectory`、可取消目录读取、`Pull` 和 `Push` 前统一调用 `adb -s <serial> disable-verity <permission-key>`；未传入 `-p` 时不执行该步骤。
+  - `disable-verity` 的输出通过捕获/静默执行路径处理，避免污染 TUI 界面。
+  - README 和 README_ZH 增加 `-p` 参数说明和带秘钥启动示例。
+- 验证结果：
+  - `cmake --build build-release --config Release` 通过。
+  - 重新生成 `dist/adb-files-tui-darwin-arm64`。
+  - `otool -L dist/adb-files-tui-darwin-arm64` 仍只显示 macOS 系统库依赖，没有 FTXUI 动态库依赖。
+  - 使用 fake adb 以 `-p secret-key` 启动，日志顺序为 `disable-verity:serial123:secret-key` 后接 `shell:serial123`，确认设备文件命令前会先执行 `disable-verity`。
+- 文件变更：
+  - 更新 `src/main.cpp`
+  - 更新 `src/app.h`
+  - 更新 `src/app.cpp`
+  - 更新 `src/adb_client.h`
+  - 更新 `src/adb_client.cpp`
+  - 更新 `README.md`
+  - 更新 `README_ZH.md`
+  - 更新 `dist/adb-files-tui-darwin-arm64`
+  - 更新 `CODEX_HISTORY.md`

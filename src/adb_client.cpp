@@ -260,8 +260,10 @@ int RunCancellable(const std::vector<std::string>& args,
 
 }  // namespace
 
-AdbClient::AdbClient(std::string adb_command, std::string serial)
-    : adb_command_(std::move(adb_command)), serial_(std::move(serial)) {}
+AdbClient::AdbClient(std::string adb_command, std::string serial, std::string verity_key)
+    : adb_command_(std::move(adb_command)),
+      serial_(std::move(serial)),
+      verity_key_(std::move(verity_key)) {}
 
 bool AdbClient::IsAvailable(const std::string& adb_command) {
     return RunCapture({adb_command, "version"}).exit_code == 0;
@@ -291,12 +293,20 @@ std::optional<std::string> AdbClient::FirstDeviceSerial(const std::string& adb_c
 }
 
 CommandResult AdbClient::ListDirectory(const std::string& remote_path) const {
+    CommandResult permission = DisableVerity();
+    if (permission.exit_code != 0) {
+        return permission;
+    }
     return RunCapture({adb_command_, "-s", serial_, "shell", ListScript(remote_path)});
 }
 
 CommandResult AdbClient::ListDirectory(const std::string& remote_path,
                                        std::atomic_bool& cancel_requested,
                                        std::atomic<int>& current_pid) const {
+    CommandResult permission = DisableVerity(cancel_requested, current_pid);
+    if (permission.exit_code != 0) {
+        return permission;
+    }
     return RunCaptureCancellable({adb_command_, "-s", serial_, "shell", ListScript(remote_path)},
                                  cancel_requested,
                                  current_pid);
@@ -306,6 +316,10 @@ int AdbClient::Pull(const std::string& remote_path,
                     const std::string& local_dir,
                     std::atomic_bool& cancel_requested,
                     std::atomic<int>& current_pid) const {
+    CommandResult permission = DisableVerity(cancel_requested, current_pid);
+    if (permission.exit_code != 0) {
+        return permission.exit_code;
+    }
     return RunCancellable({adb_command_, "-s", serial_, "pull", remote_path, local_dir},
                           cancel_requested,
                           current_pid);
@@ -315,9 +329,30 @@ int AdbClient::Push(const std::string& local_path,
                     const std::string& remote_dir,
                     std::atomic_bool& cancel_requested,
                     std::atomic<int>& current_pid) const {
+    CommandResult permission = DisableVerity(cancel_requested, current_pid);
+    if (permission.exit_code != 0) {
+        return permission.exit_code;
+    }
     return RunCancellable({adb_command_, "-s", serial_, "push", local_path, remote_dir},
                           cancel_requested,
                           current_pid);
+}
+
+CommandResult AdbClient::DisableVerity() const {
+    if (verity_key_.empty()) {
+        return {0, {}};
+    }
+    return RunCapture({adb_command_, "-s", serial_, "disable-verity", verity_key_});
+}
+
+CommandResult AdbClient::DisableVerity(std::atomic_bool& cancel_requested,
+                                       std::atomic<int>& current_pid) const {
+    if (verity_key_.empty()) {
+        return {0, {}};
+    }
+    return RunCaptureCancellable({adb_command_, "-s", serial_, "disable-verity", verity_key_},
+                                 cancel_requested,
+                                 current_pid);
 }
 
 std::vector<RemoteEntry> ParseDirectoryEntries(const std::string& output) {

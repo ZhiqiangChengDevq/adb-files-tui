@@ -24,7 +24,7 @@ struct CommandResult {
 
 class AdbClient {
 public:
-    AdbClient(std::string adb_command, std::string serial);
+    AdbClient(std::string adb_command, std::string serial, std::string verity_key = {});
 
     static bool IsAvailable(const std::string& adb_command);
     static std::optional<std::string> FirstDeviceSerial(const std::string& adb_command);
@@ -45,8 +45,12 @@ public:
     const std::string& serial() const { return serial_; }
 
 private:
+    CommandResult DisableVerity() const;
+    CommandResult DisableVerity(std::atomic_bool& cancel_requested, std::atomic<int>& current_pid) const;
+
     std::string adb_command_;
     std::string serial_;
+    std::string verity_key_;
 };
 
 std::vector<RemoteEntry> ParseDirectoryEntries(const std::string& output);
