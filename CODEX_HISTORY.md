@@ -302,3 +302,26 @@ PLEASE IMPLEMENT THIS PLAN:
   - 更新 `README.md`
   - 更新 `README_ZH.md`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 013
+
+- Time: 2026-06-23 10:17:17 CST (+0800)
+- 用户请求：修复一个 BUG：上传文件后需要主动刷新当前路径下的全部内容，以同步显示内容。修改完提交 git 并记录 `CODEX_HISTORY.md`。
+- Codex 回复：在导入文件的 `adb push` 成功后重新枚举当前远端目录，并在 FTXUI 主循环中更新文件列表、重置光标和选择状态；补充本次历史记录，验证后提交。
+- 使用提示词：
+
+```text
+修复一个BUG，在上传文件后需要主动刷新一下当前路径下的全部内容以同步显示内容。修改完提交git并记录 [CODEX_HISTORY.md](CODEX_HISTORY.md) 
+```
+
+- 实施方案：
+  - 在 `StartImport` 的后台传输线程中，检测到 `adb.Push` 返回成功后，立即调用 `adb.ListDirectory(remote_dir)` 重新获取当前目录内容。
+  - 将刷新得到的条目通过 FTXUI `screen->Post` 投递回主循环，更新 `state.entries`、`state.current_path`，并重置光标和选择状态。
+  - 如果上传成功但刷新目录失败，保留上传完成状态，同时在完成消息中附加刷新失败提示。
+- 验证结果：
+  - `cmake -S . -B build && cmake --build build` 通过。
+  - 使用 fake adb 模拟导入：初始目录只显示 `existing.txt`，`push` 后 fake adb 的目录状态变为包含 `uploaded.txt`。
+  - TUI 导入完成后列表显示 `existing.txt` 和 `uploaded.txt`；fake adb 日志顺序为 `list:before`、`push:...:/`、`list:after`，确认上传成功后主动刷新了当前目录。
+- 文件变更：
+  - 更新 `src/app.cpp`
+  - 更新 `CODEX_HISTORY.md`

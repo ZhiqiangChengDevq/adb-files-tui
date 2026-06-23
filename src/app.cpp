@@ -318,10 +318,33 @@ void StartImport(TuiState& state,
     transfer_thread = std::thread([source, remote_dir = state.current_path, &state, &adb, screen, &cancel_requested, &current_pid]() {
         int code = adb.Push(source.string(), remote_dir, cancel_requested, current_pid);
         const bool cancelled = cancel_requested.load();
-        screen->Post([&state, code, cancelled] {
+        CommandResult refresh_result;
+        std::vector<RemoteEntry> refreshed_entries;
+        if (code == 0) {
+            refresh_result = adb.ListDirectory(remote_dir);
+            refreshed_entries = ParseDirectoryEntries(refresh_result.output);
+        }
+
+        screen->Post([&state,
+                      code,
+                      cancelled,
+                      remote_dir,
+                      refresh_exit_code = refresh_result.exit_code,
+                      refresh_output = std::move(refresh_result.output),
+                      refreshed_entries = std::move(refreshed_entries)]() mutable {
             if (code == 0) {
+                state.current_path = remote_dir;
+                state.entries = std::move(refreshed_entries);
+                state.cursor = 0;
+                ResetSelection(state);
                 state.copy.completed = 1;
                 state.copy.message = Tr(state.chinese, "已完成", "Completed");
+                if (refresh_exit_code != 0) {
+                    state.copy.message += Tr(state.chinese, "，但刷新目录失败", ", but directory refresh failed");
+                    if (!refresh_output.empty()) {
+                        state.copy.message += ": " + refresh_output;
+                    }
+                }
             } else if (cancelled) {
                 state.copy.completed = 1;
                 state.copy.message = Tr(state.chinese, "已取消", "Cancelled");
