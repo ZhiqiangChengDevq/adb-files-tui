@@ -30,6 +30,9 @@ public:
     static std::optional<std::string> FirstDeviceSerial(const std::string& adb_command);
 
     CommandResult ListDirectory(const std::string& remote_path) const;
+    CommandResult ListDirectory(const std::string& remote_path,
+                                std::atomic_bool& cancel_requested,
+                                std::atomic<int>& current_pid) const;
     int Pull(const std::string& remote_path,
              const std::string& local_dir,
              std::atomic_bool& cancel_requested,

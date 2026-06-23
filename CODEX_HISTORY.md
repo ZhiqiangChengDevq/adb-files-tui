@@ -409,3 +409,33 @@ PLEASE IMPLEMENT THIS PLAN:
   - 更新 `README_ZH.md`
   - 更新 `dist/adb-files-tui-darwin-arm64`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 018
+
+- Time: 2026-06-23 12:06:14 CST (+0800)
+- 用户请求：在右下角增加 `Loading` 和 `Loaded`（加载中和加载完成）状态显示，用于表示当前命令执行情况；进入文件很多的目录时通过右下角状态直观展示运行状态；在 `Loading` 状态下，除了 `Esc` 可以打断，其他按键命令都不再响应，直到当前命令执行完成。
+- Codex 回复：将设备目录读取改为后台可取消任务；底部栏左侧继续显示滚动路径，右侧固定显示 `Loading`/`Loaded`；目录加载期间屏蔽除 `Esc` 外的所有按键，并支持 `Esc` 终止当前 adb 列目录子进程；同步更新发布二进制。
+- 使用提示词：
+
+```text
+右下角增加一个Loading和Loaded（加载中和加载完成）的状态显示，用于表示当前命令的执行情况，例如在进入有很多文件的文件内，获取文件夹结构的时间会显著增大，此时通过右下角状态可以直观表现当前程序运行状态。且在Loading状态下，除了Esc可以打断，其他按键命令都不再响应，直到当前命令执行完成
+```
+
+- 实施方案：
+  - 为 `AdbClient::ListDirectory` 增加可取消重载，使用 `fork/execvp`、管道捕获 stdout/stderr，并通过进程组支持 `Esc` 终止当前 adb 子进程。
+  - 新增 `TuiState::loading` 和目录加载请求编号，避免已取消或过期的加载结果覆盖当前界面。
+  - 将进入目录和返回上级目录从同步读取改为 `StartLoadDirectory` 后台线程读取；读取成功后回到主循环更新列表、排序、光标和选中状态。
+  - 底部栏改为左右布局：左侧为可滚动当前路径，右侧固定宽度显示 `Loading` 或 `Loaded`。
+  - 在事件处理中增加加载态拦截：`Loading` 时仅响应 `Esc` 取消目录读取，其余按键全部吞掉。
+  - 程序退出时同时清理目录加载线程和可能存在的 adb 列目录子进程。
+- 验证结果：
+  - `cmake --build build-release --config Release` 通过。
+  - 重新生成 `dist/adb-files-tui-darwin-arm64`。
+  - `otool -L dist/adb-files-tui-darwin-arm64` 仍只显示 macOS 系统库依赖，没有 FTXUI 动态库依赖。
+  - 使用 fake adb 模拟慢目录：按 `D` 进入慢目录后界面输出包含 `Loading`；加载中按 `Esc` 可取消目录读取，并在取消后再次按 `Esc` 正常退出。
+- 文件变更：
+  - 更新 `src/adb_client.h`
+  - 更新 `src/adb_client.cpp`
+  - 更新 `src/app.cpp`
+  - 更新 `dist/adb-files-tui-darwin-arm64`
+  - 更新 `CODEX_HISTORY.md`

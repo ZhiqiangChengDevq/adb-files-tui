@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -62,6 +63,119 @@ CommandResult RunCapture(const std::vector<std::string>& args) {
     const int status = pclose(pipe);
     if (WIFEXITED(status)) {
         result.exit_code = WEXITSTATUS(status);
+    }
+    return result;
+}
+
+CommandResult RunCaptureCancellable(const std::vector<std::string>& args,
+                                    std::atomic_bool& cancel_requested,
+                                    std::atomic<int>& current_pid) {
+    CommandResult result;
+    int pipe_fds[2];
+    if (pipe(pipe_fds) != 0) {
+        result.output = std::strerror(errno);
+        return result;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        result.output = std::strerror(errno);
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
+        return result;
+    }
+
+    if (pid == 0) {
+        setpgid(0, 0);
+        close(pipe_fds[0]);
+        dup2(pipe_fds[1], STDOUT_FILENO);
+        dup2(pipe_fds[1], STDERR_FILENO);
+        close(pipe_fds[1]);
+
+        int dev_null = open("/dev/null", O_RDONLY);
+        if (dev_null >= 0) {
+            dup2(dev_null, STDIN_FILENO);
+            close(dev_null);
+        }
+
+        std::vector<char*> argv;
+        argv.reserve(args.size() + 1);
+        for (const auto& arg : args) {
+            argv.push_back(const_cast<char*>(arg.c_str()));
+        }
+        argv.push_back(nullptr);
+
+        execvp(argv[0], argv.data());
+        _exit(127);
+    }
+
+    close(pipe_fds[1]);
+    setpgid(pid, pid);
+    current_pid.store(static_cast<int>(pid));
+
+    int flags = fcntl(pipe_fds[0], F_GETFL, 0);
+    if (flags >= 0) {
+        fcntl(pipe_fds[0], F_SETFL, flags | O_NONBLOCK);
+    }
+
+    auto drain_output = [&] {
+        std::array<char, 4096> buffer{};
+        while (true) {
+            ssize_t bytes_read = read(pipe_fds[0], buffer.data(), buffer.size());
+            if (bytes_read > 0) {
+                result.output.append(buffer.data(), static_cast<size_t>(bytes_read));
+                continue;
+            }
+            if (bytes_read == 0) {
+                break;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                break;
+            }
+            result.output = std::strerror(errno);
+            break;
+        }
+    };
+
+    int status = 0;
+    while (true) {
+        drain_output();
+        pid_t waited = waitpid(pid, &status, WNOHANG);
+        if (waited == pid) {
+            break;
+        }
+        if (waited < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            result.output = std::strerror(errno);
+            close(pipe_fds[0]);
+            current_pid.store(-1);
+            return result;
+        }
+        if (cancel_requested.load()) {
+            kill(-pid, SIGTERM);
+            waitpid(pid, &status, 0);
+            result.exit_code = 130;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    drain_output();
+    close(pipe_fds[0]);
+    current_pid.store(-1);
+
+    if (result.exit_code == 130) {
+        return result;
+    }
+    if (WIFEXITED(status)) {
+        result.exit_code = WEXITSTATUS(status);
+    } else if (WIFSIGNALED(status)) {
+        result.exit_code = 128 + WTERMSIG(status);
     }
     return result;
 }
@@ -178,6 +292,14 @@ std::optional<std::string> AdbClient::FirstDeviceSerial(const std::string& adb_c
 
 CommandResult AdbClient::ListDirectory(const std::string& remote_path) const {
     return RunCapture({adb_command_, "-s", serial_, "shell", ListScript(remote_path)});
+}
+
+CommandResult AdbClient::ListDirectory(const std::string& remote_path,
+                                       std::atomic_bool& cancel_requested,
+                                       std::atomic<int>& current_pid) const {
+    return RunCaptureCancellable({adb_command_, "-s", serial_, "shell", ListScript(remote_path)},
+                                 cancel_requested,
+                                 current_pid);
 }
 
 int AdbClient::Pull(const std::string& remote_path,

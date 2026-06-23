@@ -27,6 +27,7 @@ namespace {
 constexpr const char* kAppName = "adb-files-tui";
 constexpr const char* kVersion = ADB_FILES_TUI_VERSION;
 constexpr int kHelpPanelWidth = 30;
+constexpr int kFooterStatusWidth = 10;
 
 struct CopyState {
     bool active = false;
@@ -46,6 +47,8 @@ enum class SortMode {
 struct TuiState {
     bool chinese = true;
     SortMode sort_mode = SortMode::Name;
+    bool loading = false;
+    int load_request_id = 0;
     std::string current_path = "/";
     std::vector<RemoteEntry> entries;
     std::vector<bool> selected;
@@ -169,7 +172,12 @@ std::string ScrolledPath(const std::string& path, int width, int offset) {
 
 ftxui::Element Footer(const TuiState& state, int width) {
     using namespace ftxui;
-    return text(ScrolledPath(state.current_path, std::max(10, width), state.path_scroll)) |
+    const int path_width = std::max(10, width - kFooterStatusWidth - 1);
+    return hbox({
+               text(ScrolledPath(state.current_path, path_width, state.path_scroll)) | flex,
+               text(state.loading ? "Loading" : "Loaded") | align_right |
+                   size(WIDTH, EQUAL, kFooterStatusWidth),
+           }) |
            size(HEIGHT, EQUAL, 1);
 }
 
@@ -210,7 +218,7 @@ ftxui::Element HelpPanel(const TuiState& state) {
         text(Tr(state.chinese, "I      导入文件", "I      Import")),
         text(Tr(state.chinese, "O      切换排序", "O      Sort mode")),
         text(Tr(state.chinese, "L      切换语言", "L      Language")),
-        text(Tr(state.chinese, "Esc    退出/取消", "Esc    Exit/Cancel")),
+        text(Tr(state.chinese, "Esc    取消加载/退出", "Esc    Cancel/Exit")),
     };
     return vbox(std::move(rows)) | border | size(WIDTH, EQUAL, kHelpPanelWidth);
 }
@@ -291,6 +299,69 @@ void LoadDirectory(TuiState& state, const AdbClient& adb, const std::string& pat
     } else {
         state.status = Tr(state.chinese, "目录读取失败: ", "Failed to read directory: ") + result.output;
     }
+}
+
+void StartLoadDirectory(TuiState& state,
+                        const AdbClient& adb,
+                        const std::string& path,
+                        ftxui::ScreenInteractive* screen,
+                        std::atomic_bool& load_cancel_requested,
+                        std::atomic<int>& load_current_pid,
+                        std::thread& load_thread) {
+    if (load_thread.joinable()) {
+        load_thread.join();
+    }
+
+    state.loading = true;
+    state.status = Tr(state.chinese, "正在读取目录: ", "Loading directory: ") + path;
+    const int request_id = ++state.load_request_id;
+    load_cancel_requested.store(false);
+    load_current_pid.store(-1);
+
+    load_thread = std::thread([path,
+                               request_id,
+                               &state,
+                               &adb,
+                               screen,
+                               &load_cancel_requested,
+                               &load_current_pid] {
+        CommandResult result = adb.ListDirectory(path, load_cancel_requested, load_current_pid);
+        const bool cancelled = load_cancel_requested.load() || result.exit_code == 130;
+        std::vector<RemoteEntry> entries;
+        if (result.exit_code == 0) {
+            entries = ParseDirectoryEntries(result.output);
+        }
+
+        screen->Post([&state,
+                      path,
+                      request_id,
+                      cancelled,
+                      exit_code = result.exit_code,
+                      output = std::move(result.output),
+                      entries = std::move(entries)]() mutable {
+            if (request_id != state.load_request_id) {
+                return;
+            }
+
+            state.loading = false;
+            if (cancelled) {
+                state.status = Tr(state.chinese, "目录读取已取消", "Directory load cancelled");
+                return;
+            }
+
+            if (exit_code == 0) {
+                state.current_path = path;
+                state.entries = std::move(entries);
+                SortEntries(state.entries, state.sort_mode);
+                state.cursor = 0;
+                ResetSelection(state);
+                state.status.clear();
+            } else {
+                state.status = Tr(state.chinese, "目录读取失败: ", "Failed to read directory: ") + output;
+            }
+        });
+        screen->PostEvent(ftxui::Event::Custom);
+    });
 }
 
 void StartExport(TuiState& state,
@@ -459,7 +530,10 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
     TuiState state;
     std::atomic_bool cancel_requested{false};
     std::atomic<int> current_pid{-1};
+    std::atomic_bool load_cancel_requested{false};
+    std::atomic<int> load_current_pid{-1};
     std::thread transfer_thread;
+    std::thread load_thread;
 
     auto screen = ScreenInteractive::Fullscreen();
     LoadDirectory(state, adb, "/");
@@ -492,6 +566,18 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
         if (event == Event::Custom) {
             ++state.path_scroll;
             return false;
+        }
+
+        if (state.loading) {
+            if (event == Event::Escape) {
+                load_cancel_requested.store(true);
+                int pid = load_current_pid.load();
+                if (pid > 0) {
+                    kill(-pid, SIGTERM);
+                }
+                state.status = Tr(state.chinese, "正在取消目录读取...", "Cancelling directory load...");
+            }
+            return true;
         }
 
         if (state.copy.active) {
@@ -553,13 +639,25 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
         }
         if (IsRightEvent(event)) {
             if (!state.entries.empty() && state.entries[state.cursor].type == EntryType::Directory) {
-                LoadDirectory(state, adb, JoinRemotePath(state.current_path, state.entries[state.cursor].name));
+                StartLoadDirectory(state,
+                                   adb,
+                                   JoinRemotePath(state.current_path, state.entries[state.cursor].name),
+                                   &screen,
+                                   load_cancel_requested,
+                                   load_current_pid,
+                                   load_thread);
             }
             return true;
         }
         if (IsLeftEvent(event)) {
             if (state.current_path != "/") {
-                LoadDirectory(state, adb, ParentRemotePath(state.current_path));
+                StartLoadDirectory(state,
+                                   adb,
+                                   ParentRemotePath(state.current_path),
+                                   &screen,
+                                   load_cancel_requested,
+                                   load_current_pid,
+                                   load_thread);
             }
             return true;
         }
@@ -599,8 +697,16 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
     if (pid > 0) {
         kill(-pid, SIGTERM);
     }
+    load_cancel_requested.store(true);
+    int load_pid = load_current_pid.load();
+    if (load_pid > 0) {
+        kill(-load_pid, SIGTERM);
+    }
     if (transfer_thread.joinable()) {
         transfer_thread.join();
+    }
+    if (load_thread.joinable()) {
+        load_thread.join();
     }
     return 0;
 }
