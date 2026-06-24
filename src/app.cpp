@@ -28,6 +28,10 @@ constexpr const char* kAppName = "adb-files-tui";
 constexpr const char* kVersion = ADB_FILES_TUI_VERSION;
 constexpr int kHelpPanelWidth = 30;
 constexpr int kFooterStatusWidth = 10;
+constexpr int kEntryTimeWidth = 18;
+constexpr int kPreviewMaxWidth = 88;
+constexpr int kPreviewMinWidth = 52;
+constexpr int kPreviewHeight = 18;
 
 struct CopyState {
     bool active = false;
@@ -36,6 +40,17 @@ struct CopyState {
     int completed = 0;
     int total = 0;
     std::string title;
+    std::string message;
+};
+
+struct PreviewState {
+    bool active = false;
+    bool loading = false;
+    bool cancelled = false;
+    int scroll = 0;
+    int request_id = 0;
+    std::string title;
+    std::string content;
     std::string message;
 };
 
@@ -58,6 +73,7 @@ struct TuiState {
     bool show_input = false;
     std::string import_path;
     CopyState copy;
+    PreviewState preview;
 };
 
 std::string Tr(bool chinese, const std::string& zh, const std::string& en) {
@@ -150,6 +166,22 @@ std::string EntryPrefix(const RemoteEntry& entry) {
     return "[?] ";
 }
 
+std::string EntryTimeLabel(const RemoteEntry& entry) {
+    if (!entry.modified_label.empty()) {
+        return entry.modified_label;
+    }
+    if (entry.modified_time <= 0) {
+        return "";
+    }
+
+    std::time_t raw = static_cast<std::time_t>(entry.modified_time);
+    std::tm tm{};
+    localtime_r(&raw, &tm);
+    std::ostringstream out;
+    out << std::put_time(&tm, "%Y-%m-%d %H:%M");
+    return out.str();
+}
+
 ftxui::Element Header(const TuiState& state) {
     using namespace ftxui;
     return hbox({
@@ -195,7 +227,11 @@ ftxui::Element FileList(const TuiState& state) {
         const bool checked = i < state.selected.size() && state.selected[i];
         std::string row = std::string(checked ? "[x] " : "[ ] ") + EntryPrefix(state.entries[i]) +
                           state.entries[i].name;
-        auto element = text(row);
+        auto element = hbox({
+            text(row) | flex,
+            text(EntryTimeLabel(state.entries[i])) | dim | align_right |
+                size(WIDTH, EQUAL, kEntryTimeWidth),
+        });
         if (static_cast<int>(i) == state.cursor) {
             element = element | inverted | focus;
         }
@@ -216,6 +252,8 @@ ftxui::Element HelpPanel(const TuiState& state) {
         text(Tr(state.chinese, "Space  选择/取消", "Space  Toggle")),
         text(Tr(state.chinese, "E      导出选中", "E      Export")),
         text(Tr(state.chinese, "I      导入文件", "I      Import")),
+        text(Tr(state.chinese, "T      删除选中", "T      Delete")),
+        text(Tr(state.chinese, "P      预览文件", "P      Preview")),
         text(Tr(state.chinese, "O      切换排序", "O      Sort mode")),
         text(Tr(state.chinese, "L      切换语言", "L      Language")),
         text(Tr(state.chinese, "Esc    取消加载/退出", "Esc    Cancel/Exit")),
@@ -280,11 +318,97 @@ ftxui::Element InputModal(const TuiState& state, ftxui::Element input_element) {
                   }) | size(WIDTH, GREATER_THAN, 58));
 }
 
+std::vector<std::string> WrapText(const std::string& content, int width) {
+    std::vector<std::string> lines;
+    if (width <= 0) {
+        return lines;
+    }
+
+    std::istringstream stream(content);
+    std::string line;
+    while (std::getline(stream, line)) {
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        for (char& c : line) {
+            const unsigned char value = static_cast<unsigned char>(c);
+            if (c == '\t') {
+                c = ' ';
+            } else if (value < 32 || value == 127) {
+                c = '.';
+            }
+        }
+        if (line.empty()) {
+            lines.push_back("");
+            continue;
+        }
+        for (size_t start = 0; start < line.size(); start += static_cast<size_t>(width)) {
+            lines.push_back(line.substr(start, static_cast<size_t>(width)));
+        }
+    }
+    if (content.empty()) {
+        lines.push_back("");
+    }
+    return lines;
+}
+
+ftxui::Element PreviewModal(const TuiState& state, int screen_width) {
+    using namespace ftxui;
+    const int modal_width = std::max(kPreviewMinWidth, std::min(kPreviewMaxWidth, screen_width - 8));
+    const int content_width = std::max(20, modal_width - 4);
+    Elements rows;
+
+    if (!state.preview.message.empty()) {
+        rows.push_back(text(state.preview.message) | color(Color::Yellow));
+        rows.push_back(separator());
+    }
+
+    if (state.preview.loading) {
+        rows.push_back(text(Tr(state.chinese, "正在读取预览内容...", "Loading preview...")) | dim);
+    } else {
+        std::vector<std::string> wrapped = WrapText(state.preview.content, content_width);
+        const int max_scroll = std::max(0, static_cast<int>(wrapped.size()) - kPreviewHeight);
+        const int scroll = std::max(0, std::min(state.preview.scroll, max_scroll));
+        Elements content_rows;
+        for (int i = 0; i < kPreviewHeight; ++i) {
+            int index = scroll + i;
+            if (index >= static_cast<int>(wrapped.size())) {
+                break;
+            }
+            content_rows.push_back(text(wrapped[static_cast<size_t>(index)]));
+        }
+        if (content_rows.empty()) {
+            content_rows.push_back(text(Tr(state.chinese, "无可显示内容", "No preview content")) | dim);
+        }
+        rows.push_back(vbox(std::move(content_rows)) | size(WIDTH, EQUAL, content_width) |
+                       size(HEIGHT, EQUAL, kPreviewHeight));
+    }
+
+    rows.push_back(separator());
+    rows.push_back(text(Tr(state.chinese, "↑/↓ 滚动，Esc 关闭/取消", "↑/↓ scroll, Esc close/cancel")) | dim);
+    return window(text(state.preview.title), vbox(std::move(rows)) | size(WIDTH, EQUAL, content_width));
+}
+
 void ResetSelection(TuiState& state) {
     state.selected.assign(state.entries.size(), false);
     if (state.cursor >= static_cast<int>(state.entries.size())) {
         state.cursor = state.entries.empty() ? 0 : static_cast<int>(state.entries.size()) - 1;
     }
+}
+
+std::vector<std::string> CurrentTargets(const TuiState& state) {
+    std::vector<std::string> paths;
+    for (size_t i = 0; i < state.entries.size(); ++i) {
+        if (i < state.selected.size() && state.selected[i]) {
+            paths.push_back(JoinRemotePath(state.current_path, state.entries[i].name));
+        }
+    }
+
+    if (paths.empty() && !state.entries.empty() &&
+        state.cursor >= 0 && state.cursor < static_cast<int>(state.entries.size())) {
+        paths.push_back(JoinRemotePath(state.current_path, state.entries[state.cursor].name));
+    }
+    return paths;
 }
 
 void LoadDirectory(TuiState& state, const AdbClient& adb, const std::string& path) {
@@ -371,18 +495,7 @@ void StartExport(TuiState& state,
                  std::atomic_bool& cancel_requested,
                  std::atomic<int>& current_pid,
                  std::thread& transfer_thread) {
-    std::vector<std::string> paths;
-    for (size_t i = 0; i < state.entries.size(); ++i) {
-        if (i < state.selected.size() && state.selected[i]) {
-            paths.push_back(JoinRemotePath(state.current_path, state.entries[i].name));
-        }
-    }
-
-    if (paths.empty() && !state.entries.empty() &&
-        state.cursor >= 0 && state.cursor < static_cast<int>(state.entries.size())) {
-        paths.push_back(JoinRemotePath(state.current_path, state.entries[state.cursor].name));
-    }
-
+    std::vector<std::string> paths = CurrentTargets(state);
     if (paths.empty()) {
         state.status = Tr(state.chinese, "没有可导出的文件或文件夹", "No file or folder is available to export");
         return;
@@ -425,6 +538,86 @@ void StartExport(TuiState& state,
             state.copy.finished = true;
             state.copy.cancelled = cancelled;
             state.copy.message = FinalCopyMessage(state.chinese, state.copy.cancelled, failures);
+        });
+        screen->PostEvent(ftxui::Event::Custom);
+        AutoCloseCopyModal(state, screen);
+    });
+}
+
+void StartDelete(TuiState& state,
+                 const AdbClient& adb,
+                 ftxui::ScreenInteractive* screen,
+                 std::atomic_bool& cancel_requested,
+                 std::atomic<int>& current_pid,
+                 std::thread& transfer_thread) {
+    std::vector<std::string> paths = CurrentTargets(state);
+    if (paths.empty()) {
+        state.status = Tr(state.chinese, "没有可删除的文件或文件夹", "No file or folder is available to delete");
+        return;
+    }
+
+    state.copy = {};
+    state.copy.active = true;
+    state.copy.total = static_cast<int>(paths.size());
+    state.copy.title = Tr(state.chinese, "删除", "Delete");
+    state.copy.message = Tr(state.chinese, "正在删除...", "Deleting...");
+    cancel_requested.store(false);
+
+    if (transfer_thread.joinable()) {
+        transfer_thread.join();
+    }
+
+    transfer_thread = std::thread([paths = std::move(paths),
+                                   remote_dir = state.current_path,
+                                   &state,
+                                   &adb,
+                                   screen,
+                                   &cancel_requested,
+                                   &current_pid] {
+        int failures = 0;
+        for (const auto& path : paths) {
+            if (cancel_requested.load()) {
+                break;
+            }
+            int code = adb.Remove(path, cancel_requested, current_pid);
+            if (code != 0) {
+                ++failures;
+            }
+            screen->Post([&state] { ++state.copy.completed; });
+            screen->PostEvent(ftxui::Event::Custom);
+        }
+
+        const bool cancelled = cancel_requested.load();
+        CommandResult refresh_result;
+        std::vector<RemoteEntry> refreshed_entries;
+        if (!cancelled) {
+            refresh_result = adb.ListDirectory(remote_dir);
+            refreshed_entries = ParseDirectoryEntries(refresh_result.output);
+        }
+
+        screen->Post([&state,
+                      cancelled,
+                      failures,
+                      remote_dir,
+                      refresh_exit_code = refresh_result.exit_code,
+                      refresh_output = std::move(refresh_result.output),
+                      refreshed_entries = std::move(refreshed_entries)]() mutable {
+            if (!cancelled && refresh_exit_code == 0) {
+                state.current_path = remote_dir;
+                state.entries = std::move(refreshed_entries);
+                SortEntries(state.entries, state.sort_mode);
+                state.cursor = 0;
+                ResetSelection(state);
+            }
+            state.copy.finished = true;
+            state.copy.cancelled = cancelled;
+            state.copy.message = FinalCopyMessage(state.chinese, state.copy.cancelled, failures);
+            if (!cancelled && refresh_exit_code != 0) {
+                state.copy.message += Tr(state.chinese, "，但刷新目录失败", ", but directory refresh failed");
+                if (!refresh_output.empty()) {
+                    state.copy.message += ": " + refresh_output;
+                }
+            }
         });
         screen->PostEvent(ftxui::Event::Custom);
         AutoCloseCopyModal(state, screen);
@@ -503,6 +696,67 @@ void StartImport(TuiState& state,
     });
 }
 
+void StartPreview(TuiState& state,
+                  const AdbClient& adb,
+                  ftxui::ScreenInteractive* screen,
+                  std::atomic_bool& preview_cancel_requested,
+                  std::atomic<int>& preview_current_pid,
+                  std::thread& preview_thread) {
+    if (state.entries.empty() || state.cursor < 0 || state.cursor >= static_cast<int>(state.entries.size())) {
+        state.status = Tr(state.chinese, "没有可预览的文件", "No file is available to preview");
+        return;
+    }
+
+    if (preview_thread.joinable()) {
+        preview_thread.join();
+    }
+
+    const std::string path = JoinRemotePath(state.current_path, state.entries[state.cursor].name);
+    state.preview.active = true;
+    state.preview.loading = true;
+    state.preview.cancelled = false;
+    state.preview.scroll = 0;
+    state.preview.title = path;
+    state.preview.content.clear();
+    state.preview.message.clear();
+    const int request_id = ++state.preview.request_id;
+    preview_cancel_requested.store(false);
+    preview_current_pid.store(-1);
+
+    preview_thread = std::thread([path,
+                                  request_id,
+                                  &state,
+                                  &adb,
+                                  screen,
+                                  &preview_cancel_requested,
+                                  &preview_current_pid] {
+        CommandResult result = adb.Cat(path, preview_cancel_requested, preview_current_pid);
+        const bool cancelled = preview_cancel_requested.load() || result.exit_code == 130;
+        screen->Post([&state,
+                      request_id,
+                      cancelled,
+                      exit_code = result.exit_code,
+                      output = std::move(result.output)]() mutable {
+            if (request_id != state.preview.request_id) {
+                return;
+            }
+            state.preview.loading = false;
+            state.preview.cancelled = cancelled;
+            if (cancelled) {
+                state.preview.message = Tr(state.chinese, "预览已取消", "Preview cancelled");
+                state.preview.content.clear();
+            } else if (exit_code == 0) {
+                state.preview.message.clear();
+                state.preview.content = std::move(output);
+            } else {
+                state.preview.message = Tr(state.chinese, "预览失败: ", "Preview failed: ") + output;
+                state.preview.content.clear();
+            }
+        });
+        screen->PostEvent(ftxui::Event::Custom);
+    });
+}
+
 bool IsUpEvent(const ftxui::Event& event) {
     return event == ftxui::Event::ArrowUp || event == ftxui::Event::W || event == ftxui::Event::w;
 }
@@ -533,8 +787,11 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
     std::atomic<int> current_pid{-1};
     std::atomic_bool load_cancel_requested{false};
     std::atomic<int> load_current_pid{-1};
+    std::atomic_bool preview_cancel_requested{false};
+    std::atomic<int> preview_current_pid{-1};
     std::thread transfer_thread;
     std::thread load_thread;
+    std::thread preview_thread;
 
     auto screen = ScreenInteractive::Fullscreen();
     LoadDirectory(state, adb, "/");
@@ -560,6 +817,12 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
                 CopyModal(state) | clear_under | center,
             });
         }
+        if (state.preview.active) {
+            body = dbox({
+                body,
+                PreviewModal(state, screen.dimx()) | clear_under | center,
+            });
+        }
         return body;
     });
 
@@ -567,6 +830,35 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
         if (event == Event::Custom) {
             ++state.path_scroll;
             return false;
+        }
+
+        if (state.preview.active) {
+            if (event == Event::Escape) {
+                if (state.preview.loading) {
+                    preview_cancel_requested.store(true);
+                    int pid = preview_current_pid.load();
+                    if (pid > 0) {
+                        kill(-pid, SIGTERM);
+                    }
+                    state.preview.message = Tr(state.chinese, "正在取消预览...", "Cancelling preview...");
+                } else {
+                    state.preview.active = false;
+                    state.preview.content.clear();
+                    state.preview.message.clear();
+                }
+                return true;
+            }
+            if (!state.preview.loading && IsUpEvent(event)) {
+                if (state.preview.scroll > 0) {
+                    --state.preview.scroll;
+                }
+                return true;
+            }
+            if (!state.preview.loading && IsDownEvent(event)) {
+                ++state.preview.scroll;
+                return true;
+            }
+            return true;
         }
 
         if (state.loading) {
@@ -677,6 +969,14 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
             state.show_input = true;
             return true;
         }
+        if (event == Event::T || event == Event::t) {
+            StartDelete(state, adb, &screen, cancel_requested, current_pid, transfer_thread);
+            return true;
+        }
+        if (event == Event::P || event == Event::p) {
+            StartPreview(state, adb, &screen, preview_cancel_requested, preview_current_pid, preview_thread);
+            return true;
+        }
         return false;
     });
 
@@ -703,11 +1003,19 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
     if (load_pid > 0) {
         kill(-load_pid, SIGTERM);
     }
+    preview_cancel_requested.store(true);
+    int preview_pid = preview_current_pid.load();
+    if (preview_pid > 0) {
+        kill(-preview_pid, SIGTERM);
+    }
     if (transfer_thread.joinable()) {
         transfer_thread.join();
     }
     if (load_thread.joinable()) {
         load_thread.join();
+    }
+    if (preview_thread.joinable()) {
+        preview_thread.join();
     }
     return 0;
 }

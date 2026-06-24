@@ -15,6 +15,7 @@ struct RemoteEntry {
     std::string name;
     EntryType type = EntryType::Other;
     long long modified_time = 0;
+    std::string modified_label;
 };
 
 struct CommandResult {
@@ -41,6 +42,12 @@ public:
              const std::string& remote_dir,
              std::atomic_bool& cancel_requested,
              std::atomic<int>& current_pid) const;
+    int Remove(const std::string& remote_path,
+               std::atomic_bool& cancel_requested,
+               std::atomic<int>& current_pid) const;
+    CommandResult Cat(const std::string& remote_path,
+                      std::atomic_bool& cancel_requested,
+                      std::atomic<int>& current_pid) const;
 
     const std::string& serial() const { return serial_; }
 

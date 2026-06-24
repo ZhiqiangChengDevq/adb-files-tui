@@ -3,6 +3,8 @@ a tui file manager by adb tools
 
 adb-files-tui is built on top of adb to make it faster to manage and inspect files on Android devices from macOS. It provides basic file management workflows that help developers browse, import, and export device files during development.
 
+The file list reads remote metadata with `ls -l` and shows each item's modified date on the right side of the row.
+
 Languages: English | [中文](README_ZH.md)
 
 ## Project History
@@ -74,6 +76,8 @@ With a disable-verity permission key:
 - `Space`: select or unselect the current file or directory.
 - `E`: export selected files or directories.
 - `I`: import one local file into the current remote directory.
+- `T`: delete selected files or directories. If nothing is selected, delete the highlighted item.
+- `P`: preview the highlighted item with `cat`. Use `Up` / `Down` to scroll the preview and `Esc` to close or cancel while loading.
 - `O`: switch sorting between name and modified time.
 - `L`: switch language between Chinese and English.
 - `Esc`: exit on the home screen, cancel or close dialogs.

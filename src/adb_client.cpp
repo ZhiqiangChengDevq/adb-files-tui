@@ -189,12 +189,22 @@ std::string ListScript(const std::string& remote_path) {
     script << "cd " << RemoteQuote(remote_path) << " 2>/dev/null || exit 2; "
            << "for entry in * .[!.]* ..?*; do "
            << "[ -e \"$entry\" ] || continue; "
-           << "mtime=$(stat -c %Y \"$entry\" 2>/dev/null || echo 0); "
-           << "if [ -d \"$entry\" ]; then printf 'd\\t%s\\t%s\\n' \"$mtime\" \"$entry\"; "
-           << "elif [ -f \"$entry\" ]; then printf 'f\\t%s\\t%s\\n' \"$mtime\" \"$entry\"; "
-           << "else printf 'o\\t%s\\t%s\\n' \"$mtime\" \"$entry\"; fi; "
+           << "line=$(ls -ld \"$entry\" 2>/dev/null) || continue; "
+           << "mtime=$(stat -c %Y \"$entry\" 2>/dev/null || stat -f %m \"$entry\" 2>/dev/null || echo 0); "
+           << "set -- $line; "
+           << "case \"$1\" in d*) type=d ;; -*) type=f ;; *) type=o ;; esac; "
+           << "case \"$6\" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) label=\"$6 $7\" ;; *) label=\"$6 $7 $8\" ;; esac; "
+           << "printf '%s\\t%s\\t%s\\t%s\\n' \"$type\" \"$mtime\" \"$label\" \"$entry\"; "
            << "done";
     return script.str();
+}
+
+std::string RemoveScript(const std::string& remote_path) {
+    return "rm -rf " + RemoteQuote(remote_path);
+}
+
+std::string CatScript(const std::string& remote_path) {
+    return "cat " + RemoteQuote(remote_path);
 }
 
 int RunCancellable(const std::vector<std::string>& args,
@@ -338,6 +348,30 @@ int AdbClient::Push(const std::string& local_path,
                           current_pid);
 }
 
+int AdbClient::Remove(const std::string& remote_path,
+                      std::atomic_bool& cancel_requested,
+                      std::atomic<int>& current_pid) const {
+    CommandResult permission = DisableVerity(cancel_requested, current_pid);
+    if (permission.exit_code != 0) {
+        return permission.exit_code;
+    }
+    return RunCancellable({adb_command_, "-s", serial_, "shell", RemoveScript(remote_path)},
+                          cancel_requested,
+                          current_pid);
+}
+
+CommandResult AdbClient::Cat(const std::string& remote_path,
+                             std::atomic_bool& cancel_requested,
+                             std::atomic<int>& current_pid) const {
+    CommandResult permission = DisableVerity(cancel_requested, current_pid);
+    if (permission.exit_code != 0) {
+        return permission;
+    }
+    return RunCaptureCancellable({adb_command_, "-s", serial_, "shell", CatScript(remote_path)},
+                                 cancel_requested,
+                                 current_pid);
+}
+
 CommandResult AdbClient::DisableVerity() const {
     if (verity_key_.empty()) {
         return {0, {}};
@@ -374,7 +408,13 @@ std::vector<RemoteEntry> ParseDirectoryEntries(const std::string& output) {
             } catch (...) {
                 entry.modified_time = 0;
             }
-            entry.name = line.substr(second_tab + 1);
+            const auto third_tab = line.find('\t', second_tab + 1);
+            if (third_tab == std::string::npos) {
+                entry.name = line.substr(second_tab + 1);
+            } else {
+                entry.modified_label = line.substr(second_tab + 1, third_tab - second_tab - 1);
+                entry.name = line.substr(third_tab + 1);
+            }
         }
         if (entry.name.empty() || entry.name == "." || entry.name == "..") {
             continue;

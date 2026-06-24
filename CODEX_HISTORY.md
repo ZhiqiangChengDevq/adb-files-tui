@@ -472,3 +472,42 @@ PLEASE IMPLEMENT THIS PLAN:
   - 更新 `README_ZH.md`
   - 更新 `dist/adb-files-tui-darwin-arm64`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 020
+
+- Time: 2026-06-24 20:04:47 CST (+0800)
+- 用户请求：为工程增加三个功能：读取命令使用 `ls -l` 获取文件修改时间和日期，并将其右对齐显示到每个文件名的选项条中；增加快捷键 `T` 删除当前选中的全部文件和文件夹，如果没有选中项则删除当前高亮项；增加快捷键 `P`，使用 `cat` 快速预览当前高亮项内容，使用弹窗展示文本内容，上下键滚动，固定宽度自动换行，按 `Esc` 退出预览或在 `cat` 过程中打断。完成后修改 README 和 Codex 记录文件并提交 Git。
+- Codex 回复：将目录枚举改为基于 `ls -ld` 读取修改日期显示文本，同时保留时间戳用于排序；文件列表行改为左右布局，右侧显示右对齐修改日期；新增 `T` 删除操作和 `P` 文本预览弹窗，支持预览滚动和 `Esc` 取消；更新 README、README_ZH、发布产物和历史记录。
+- 使用提示词：
+
+```text
+为该工程增加下面的功能：
+1、读出命令使用ls -l以获取文件修改时间和日期，将其显示到每个文件名的选项条中，右对齐
+2、增加快捷键T的操作，代表删除当前选中的全部文件和文件夹，如果没有一个被选中则代表删除当前高亮选项的文件或文件夹
+3、增加快捷键P的操作，代码使用cat命令快速预览当前高亮的选项的内容，使用弹窗展示文本内容，上下键进行内容滚动，内容固定宽度自动换行，按ESC键退出预览或在cat过程中打断。
+上述功能完成后修改README文件和CODEX记录文件并提交Git
+```
+
+- 实施方案：
+  - 修改远端目录枚举脚本：逐项执行 `ls -ld` 获取修改日期显示字段，并继续使用 `stat` 获取时间戳以兼容现有按时间排序。
+  - 扩展 `RemoteEntry`，新增 `modified_label`；解析目录输出时支持 `类型 + 时间戳 + 日期文本 + 名称` 格式。
+  - 将文件列表每行改为左侧名称、右侧固定宽度日期文本的布局，日期文本右对齐显示。
+  - 新增 `AdbClient::Remove`，通过 `adb shell rm -rf <remote-path>` 删除文件或目录；`T` 键复用现有“选中项优先，否则当前高亮项”的目标选择逻辑，删除后刷新当前目录。
+  - 新增 `AdbClient::Cat` 和预览弹窗状态；`P` 键对当前高亮项执行 `adb shell cat <remote-path>`，弹窗固定宽度自动换行显示文本，上下键滚动，`Esc` 在加载中取消子进程、加载后关闭弹窗。
+  - README 和 README_ZH 增加 `T`、`P` 快捷键说明。
+- 验证结果：
+  - `cmake --build build-release --config Release` 通过。
+  - 重新生成 `dist/adb-files-tui-darwin-arm64`。
+  - `otool -L dist/adb-files-tui-darwin-arm64` 仍只显示 macOS 系统库依赖，没有 FTXUI 动态库依赖。
+  - 使用 fake adb 验证列表命令包含 `ls -ld`，TUI 输出包含右对齐日期文本 `2026-06-24 10:11`。
+  - 使用 fake adb 验证 `P` 触发 `cat '/alpha.txt'`，预览弹窗输出包含 `hello preview line one`。
+  - 使用 fake adb 验证 `T` 触发 `rm -rf '/alpha.txt'`，删除后重新执行目录列表刷新。
+  - 使用慢 `cat` fake adb 验证加载中按 `Esc` 可以取消预览并正常退出。
+- 文件变更：
+  - 更新 `src/adb_client.h`
+  - 更新 `src/adb_client.cpp`
+  - 更新 `src/app.cpp`
+  - 更新 `README.md`
+  - 更新 `README_ZH.md`
+  - 更新 `dist/adb-files-tui-darwin-arm64`
+  - 更新 `CODEX_HISTORY.md`
