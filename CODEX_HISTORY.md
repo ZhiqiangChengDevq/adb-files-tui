@@ -511,3 +511,29 @@ PLEASE IMPLEMENT THIS PLAN:
   - 更新 `README_ZH.md`
   - 更新 `dist/adb-files-tui-darwin-arm64`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 021
+
+- Time: 2026-06-24 20:11:28 CST (+0800)
+- 用户请求：修复一个 BUG，该 BUG 导致相关选项名称/依赖功能失效，例如方向右键已经无法进入到子文件夹；修复完成后更新 Codex 记录文件并提交 Git。
+- Codex 回复：定位到上一轮 `ls -ld` 改造后，目录类型依赖 `ls -ld` 权限首字符判断，符号链接目录等 Android 常见入口可能被识别为 `Other`，导致右键进入目录的条件不满足；将类型判断改回使用 `[ -d ]` / `[ -f ]`，保留 `ls -ld` 仅用于获取修改日期显示。
+- 使用提示词：
+
+```text
+修复一个BUG，该BUG导致了相关依赖选项名称的功能失效，例如方向右键已经无法进入到子文件夹了，修复完成后CODEX记录文件并提交Git
+```
+
+- 实施方案：
+  - 修改远端目录枚举脚本，不再使用 `ls -ld` 输出的权限首字符推断类型。
+  - 使用 `[ -d "$entry" ]` 判断目录、`[ -f "$entry" ]` 判断文件；这样符号链接到目录的入口也会被识别为目录，右键可以正常进入。
+  - 保留 `ls -ld` 读取日期文本和 `stat` 读取排序时间戳的逻辑，避免回退上一轮新增的日期显示功能。
+  - 重新构建并更新发布产物。
+- 验证结果：
+  - `cmake --build build-release --config Release` 通过。
+  - 使用 fake adb 验证目录条目按右键/`D` 后会进入 `/linkdir`，并显示子目录内容 `inside.txt`。
+  - 重新生成 `dist/adb-files-tui-darwin-arm64`。
+  - `otool -L dist/adb-files-tui-darwin-arm64` 仍只显示 macOS 系统库依赖，没有 FTXUI 动态库依赖。
+- 文件变更：
+  - 更新 `src/adb_client.cpp`
+  - 更新 `dist/adb-files-tui-darwin-arm64`
+  - 更新 `CODEX_HISTORY.md`

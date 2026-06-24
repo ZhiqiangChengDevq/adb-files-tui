@@ -192,7 +192,7 @@ std::string ListScript(const std::string& remote_path) {
            << "line=$(ls -ld \"$entry\" 2>/dev/null) || continue; "
            << "mtime=$(stat -c %Y \"$entry\" 2>/dev/null || stat -f %m \"$entry\" 2>/dev/null || echo 0); "
            << "set -- $line; "
-           << "case \"$1\" in d*) type=d ;; -*) type=f ;; *) type=o ;; esac; "
+           << "if [ -d \"$entry\" ]; then type=d; elif [ -f \"$entry\" ]; then type=f; else type=o; fi; "
            << "case \"$6\" in [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) label=\"$6 $7\" ;; *) label=\"$6 $7 $8\" ;; esac; "
            << "printf '%s\\t%s\\t%s\\t%s\\n' \"$type\" \"$mtime\" \"$label\" \"$entry\"; "
            << "done";
