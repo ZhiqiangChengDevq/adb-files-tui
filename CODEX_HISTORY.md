@@ -537,3 +537,30 @@ PLEASE IMPLEMENT THIS PLAN:
   - 更新 `src/adb_client.cpp`
   - 更新 `dist/adb-files-tui-darwin-arm64`
   - 更新 `CODEX_HISTORY.md`
+
+## Batch 022
+
+- Time: 2026-06-24 20:35:03 CST (+0800)
+- 用户请求：修复一个 BUG，该 BUG 导致当预览内容通过方向下键到最后后，再按方向上键不再有作用；修复完成后更新 Codex 记录文件并提交 Git。
+- Codex 回复：定位到预览弹窗滚动状态没有上限；渲染层虽然会把 `scroll` clamp 到最大可显示位置，但事件层按下键会继续无限增加 `scroll`，导致到达底部后按上键需要先消耗大量超出范围的值，看起来像上键失效。修复为在事件层同步计算并限制最大滚动值。
+- 使用提示词：
+
+```text
+修复一个BUG，该BUG导致当预览内容通过方向下键到最后后，再按下方向上键不再有作用了，修复完成后CODEX记录文件并提交Git
+```
+
+- 实施方案：
+  - 提取预览内容宽度计算函数，保证渲染层和事件层使用同一宽度。
+  - 新增 `PreviewMaxScroll`，基于当前预览内容、自动换行结果和预览窗口高度计算最大滚动值。
+  - 预览弹窗按下键时只在 `scroll < max_scroll` 时递增，否则保持在最大值。
+  - 预览弹窗按上键时先将异常超界的 `scroll` clamp 到最大值，再递减，确保到达底部后按上键立即生效。
+  - 重新构建并更新发布产物。
+- 验证结果：
+  - `cmake --build build-release --config Release` 通过。
+  - 使用 fake adb 返回 40 行预览内容，连续按方向下键到末尾后，再按方向上键，界面内容从末尾区域回退，确认上键立即生效。
+  - 重新生成 `dist/adb-files-tui-darwin-arm64`。
+  - `otool -L dist/adb-files-tui-darwin-arm64` 仍只显示 macOS 系统库依赖，没有 FTXUI 动态库依赖。
+- 文件变更：
+  - 更新 `src/app.cpp`
+  - 更新 `dist/adb-files-tui-darwin-arm64`
+  - 更新 `CODEX_HISTORY.md`

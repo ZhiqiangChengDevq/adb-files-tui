@@ -352,10 +352,20 @@ std::vector<std::string> WrapText(const std::string& content, int width) {
     return lines;
 }
 
+int PreviewContentWidth(int screen_width) {
+    const int modal_width = std::max(kPreviewMinWidth, std::min(kPreviewMaxWidth, screen_width - 8));
+    return std::max(20, modal_width - 4);
+}
+
+int PreviewMaxScroll(const TuiState& state, int screen_width) {
+    const int content_width = PreviewContentWidth(screen_width);
+    const std::vector<std::string> wrapped = WrapText(state.preview.content, content_width);
+    return std::max(0, static_cast<int>(wrapped.size()) - kPreviewHeight);
+}
+
 ftxui::Element PreviewModal(const TuiState& state, int screen_width) {
     using namespace ftxui;
-    const int modal_width = std::max(kPreviewMinWidth, std::min(kPreviewMaxWidth, screen_width - 8));
-    const int content_width = std::max(20, modal_width - 4);
+    const int content_width = PreviewContentWidth(screen_width);
     Elements rows;
 
     if (!state.preview.message.empty()) {
@@ -367,7 +377,7 @@ ftxui::Element PreviewModal(const TuiState& state, int screen_width) {
         rows.push_back(text(Tr(state.chinese, "正在读取预览内容...", "Loading preview...")) | dim);
     } else {
         std::vector<std::string> wrapped = WrapText(state.preview.content, content_width);
-        const int max_scroll = std::max(0, static_cast<int>(wrapped.size()) - kPreviewHeight);
+        const int max_scroll = PreviewMaxScroll(state, screen_width);
         const int scroll = std::max(0, std::min(state.preview.scroll, max_scroll));
         Elements content_rows;
         for (int i = 0; i < kPreviewHeight; ++i) {
@@ -849,13 +859,20 @@ int RunAdbFilesTui(const std::filesystem::path& output_dir,
                 return true;
             }
             if (!state.preview.loading && IsUpEvent(event)) {
+                const int max_scroll = PreviewMaxScroll(state, screen.dimx());
+                state.preview.scroll = std::min(state.preview.scroll, max_scroll);
                 if (state.preview.scroll > 0) {
                     --state.preview.scroll;
                 }
                 return true;
             }
             if (!state.preview.loading && IsDownEvent(event)) {
-                ++state.preview.scroll;
+                const int max_scroll = PreviewMaxScroll(state, screen.dimx());
+                if (state.preview.scroll < max_scroll) {
+                    ++state.preview.scroll;
+                } else {
+                    state.preview.scroll = max_scroll;
+                }
                 return true;
             }
             return true;
